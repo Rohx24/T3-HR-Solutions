@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { db, tx, UPLOAD_DIR } from './db.js';
 import { parseResume } from './parser.js';
 import { upsertCandidate, addApplication, moveStage, addNote, createCompany, createJob } from './services.js';
+import { createAccount, findUserByEmail, hashPassword } from './auth.js';
+import { runAs } from './context.js';
 
 const RESUMES = {
   priya2024: `Priya Sharma
@@ -193,15 +195,39 @@ export function reset() {
   for (const f of fs.readdirSync(UPLOAD_DIR)) fs.rmSync(path.join(UPLOAD_DIR, f), { force: true });
 }
 
-export function seedIfEmpty() {
-  if (process.env.SEED === 'false') return;
-  if (db.prepare('SELECT COUNT(*) AS n FROM companies').get().n === 0) {
-    seed();
-    console.log('Seeded demo data');
+// Shared demo login shown on the sign-in page so reviewers can explore without signing up.
+// Set DEMO_PASSWORD= (empty) to disable it.
+export const DEMO_ACCOUNT = process.env.DEMO_PASSWORD === ''
+  ? null
+  : {
+      name: 'Demo Recruiter',
+      email: process.env.DEMO_EMAIL ?? 'demo@t3hr.app',
+      password: process.env.DEMO_PASSWORD ?? 'demo1234',
+      workspace: 'T3Cogno (demo)',
+    };
+
+// Ensures the demo account exists and its workspace has sample data. Every other account gets its own
+// workspace at sign-up (optionally pre-filled with the same sample data).
+export async function seedIfEmpty() {
+  if (process.env.SEED === 'false' || !DEMO_ACCOUNT) return;
+  let user = findUserByEmail(DEMO_ACCOUNT.email);
+  if (!user) {
+    user = createAccount({
+      name: DEMO_ACCOUNT.name,
+      email: DEMO_ACCOUNT.email,
+      passwordHash: await hashPassword(DEMO_ACCOUNT.password),
+      workspaceName: DEMO_ACCOUNT.workspace,
+    });
+    console.log(`Created demo account ${DEMO_ACCOUNT.email}`);
+  }
+  const ws = user.workspace_id;
+  if (db.prepare('SELECT COUNT(*) AS n FROM companies WHERE workspace_id = ?').get(ws).n === 0) {
+    runAs({ workspaceId: ws, user: { id: user.id, name: user.name } }, seed);
+    console.log('Seeded demo workspace');
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes('--reset')) reset();
-  seedIfEmpty();
+  await seedIfEmpty();
 }

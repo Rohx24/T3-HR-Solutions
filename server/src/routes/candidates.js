@@ -8,6 +8,7 @@ import { extractText, parseResume, ALLOWED_EXTENSIONS } from '../parser.js';
 import { upsertCandidate, addApplication, addNote, getCandidateDetail, getJob } from '../services.js';
 import { toCsv } from '../csv.js';
 import { idParam } from './util.js';
+import { workspaceId, bindContext } from '../context.js';
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -31,12 +32,12 @@ function searchCandidates(query) {
   return db.prepare(`
     SELECT c.*, (SELECT COUNT(*) FROM applications a WHERE a.candidate_id = c.id) AS application_count
     FROM candidates c
-    WHERE ($q IS NULL OR c.name LIKE $like OR c.email LIKE $like OR c.primary_role LIKE $like
+    WHERE c.workspace_id = $ws AND ($q IS NULL OR c.name LIKE $like OR c.email LIKE $like OR c.primary_role LIKE $like
            OR c.location LIKE $like OR c.skills LIKE $like OR c.resume_text LIKE $like)
       AND ($role IS NULL OR c.primary_role = $role)
       AND ($skill IS NULL OR c.skills LIKE $skillLike)
     ORDER BY c.last_applied_at DESC
-  `).all({ q, like: `%${q}%`, role, skill, skillLike: `%"${skill}"%` }).map(toCandidate);
+  `).all({ ws: workspaceId(), q, like: `%${q}%`, role, skill, skillLike: `%"${skill}"%` }).map(toCandidate);
 }
 
 // GET /api/candidates?q=&skill=&role=
@@ -57,7 +58,7 @@ router.get('/export.csv', (req, res) => {
 });
 
 // POST /api/candidates/upload  (multipart: resume, job_id?)
-router.post('/upload', upload.single('resume'), async (req, res) => {
+router.post('/upload', upload.single('resume'), bindContext, async (req, res) => {
   if (!req.file) throw new HttpError(400, 'Attach a resume file in the "resume" field');
 
   const jobId = req.body?.job_id ? Number(req.body.job_id) : null;
@@ -99,7 +100,8 @@ router.get('/:id', (req, res) => {
 });
 
 router.get('/:id/resume', (req, res) => {
-  const row = db.prepare('SELECT resume_file, resume_filename FROM candidates WHERE id = ?').get(idParam(req));
+  const row = db.prepare('SELECT resume_file, resume_filename FROM candidates WHERE id = ? AND workspace_id = ?')
+    .get(idParam(req), workspaceId());
   if (!row) throw new HttpError(404, 'Candidate not found');
   const file = row.resume_file && path.join(UPLOAD_DIR, path.basename(row.resume_file));
   if (!file || !fs.existsSync(file)) throw new HttpError(404, 'No original resume file stored for this candidate');

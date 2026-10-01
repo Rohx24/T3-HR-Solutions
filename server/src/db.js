@@ -8,21 +8,54 @@ export const DATA_DIR = process.env.DATA_DIR ?? path.resolve(__dirname, '../data
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-export const db = new DatabaseSync(process.env.DB_PATH ?? path.join(DATA_DIR, 'hr.db'));
+// Schema v2 (multi-tenant): every company, job and candidate belongs to a workspace, and each user logs in
+// to one workspace. It lives in a new file (hr.v2.db) so the old single-tenant hr.db is left untouched.
+export const db = new DatabaseSync(process.env.DB_PATH ?? path.join(DATA_DIR, 'hr.v2.db'));
 
 db.exec(`
   PRAGMA journal_mode = WAL;
+  PRAGMA busy_timeout = 5000;
   PRAGMA foreign_keys = ON;
 
-  CREATE TABLE IF NOT EXISTS companies (
+  CREATE TABLE IF NOT EXISTS workspaces (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    industry    TEXT,
+    name        TEXT NOT NULL,
     created_at  TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id  INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT,
+    google_sub    TEXT UNIQUE,
+    avatar_url    TEXT,
+    role          TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'recruiter', 'interviewer')),
+    created_at    TEXT NOT NULL,
+    last_login_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    user_agent  TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS companies (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL COLLATE NOCASE,
+    industry     TEXT,
+    created_at   TEXT NOT NULL,
+    UNIQUE (workspace_id, name)
   );
 
   CREATE TABLE IF NOT EXISTS jobs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id    INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     company_id      INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     title           TEXT NOT NULL,
     required_skills TEXT NOT NULL DEFAULT '[]',
@@ -33,8 +66,9 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS candidates (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id     INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     name             TEXT NOT NULL,
-    email            TEXT UNIQUE,
+    email            TEXT,
     phone            TEXT,
     location         TEXT,
     years_experience REAL,
@@ -46,7 +80,8 @@ db.exec(`
     resume_filename  TEXT,
     times_applied    INTEGER NOT NULL DEFAULT 1,
     created_at       TEXT NOT NULL,
-    last_applied_at  TEXT NOT NULL
+    last_applied_at  TEXT NOT NULL,
+    UNIQUE (workspace_id, email)
   );
 
   CREATE TABLE IF NOT EXISTS applications (
@@ -76,9 +111,14 @@ db.exec(`
     candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
     type         TEXT NOT NULL,
     message      TEXT NOT NULL,
+    actor        TEXT,
     created_at   TEXT NOT NULL
   );
 
+  CREATE INDEX IF NOT EXISTS idx_companies_ws ON companies(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_jobs_ws ON jobs(workspace_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_candidates_ws ON candidates(workspace_id, last_applied_at);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id);
   CREATE INDEX IF NOT EXISTS idx_notes_candidate ON notes(candidate_id);
   CREATE INDEX IF NOT EXISTS idx_events_candidate ON events(candidate_id, created_at);

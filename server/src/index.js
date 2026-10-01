@@ -9,16 +9,20 @@ import jobs from './routes/jobs.js';
 import companies from './routes/companies.js';
 import applications from './routes/applications.js';
 import stats from './routes/stats.js';
+import auth from './routes/auth.js';
+import { requireAuth } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4000);
 const CLIENT_DIST = process.env.CLIENT_DIST ?? path.resolve(__dirname, '../../client/dist');
 const isProd = process.env.NODE_ENV === 'production';
 
-seedIfEmpty();
+await seedIfEmpty();
 
 const app = express();
 app.disable('x-powered-by');
+// Behind a reverse proxy (Caddy/Nginx) so req.secure and req.ip reflect the real client: TRUST_PROXY=1.
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
@@ -43,6 +47,9 @@ if (!isProd) {
 }
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.use('/api/auth', auth);
+// Everything below requires a session and only sees the signed-in user's workspace.
+app.use('/api', requireAuth);
 app.use('/api', stats);
 app.use('/api/candidates', candidates);
 app.use('/api/jobs', jobs);

@@ -12,6 +12,12 @@ const { parseResume } = await import('../src/parser.js');
 const { extractSkills, normalizeSkills, detectRole } = await import('../src/skills.js');
 const { scoreMatch } = await import('../src/matching.js');
 const { upsertCandidate, getCandidateDetail } = await import('../src/services.js');
+const { createAccount } = await import('../src/auth.js');
+const { runAs } = await import('../src/context.js');
+
+// Services are workspace-scoped, so service tests run inside a throwaway account's workspace.
+const owner = createAccount({ name: 'Test Recruiter', email: 'parser-test@example.com', passwordHash: null });
+const inWorkspace = (fn) => runAs({ workspaceId: owner.workspace_id, user: { id: owner.id, name: owner.name } }, fn);
 
 const RESUME = `ANANYA IYER
 Python Developer | Bangalore
@@ -54,7 +60,7 @@ test('match score is the % of required skills present', () => {
   assert.deepEqual(r.missing_skills, ['Kafka', 'AWS']);
 });
 
-test('same email re-applying merges into the existing candidate', () => {
+test('same email re-applying merges into the existing candidate', () => inWorkspace(() => {
   const first = upsertCandidate(parseResume(RESUME), {}, '2024-01-01T00:00:00.000Z');
   const second = upsertCandidate(parseResume(`${RESUME}\nAlso: Kafka, Kubernetes. 6 years total.`));
   assert.equal(first.returning, false);
@@ -66,4 +72,4 @@ test('same email re-applying merges into the existing candidate', () => {
   assert.equal(c.years_experience, 6);
   assert.ok(c.skills.includes('Kafka') && c.skills.includes('Django'));
   assert.match(c.events[0].message, /Returning candidate.*Jan 2024/);
-});
+}));

@@ -2,28 +2,34 @@
 import { db, tx, now, parseList, toCandidate, toJob, HttpError } from './db.js';
 import { STAGES, normalizeSkills } from './skills.js';
 import { scoreMatch } from './matching.js';
+import { workspaceId, currentUser } from './context.js';
 
 const monthYear = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
+// Every event records who did it (the signed-in user), so activity feeds read "by <name>".
 export function addEvent(candidateId, type, message, at = now()) {
-  db.prepare('INSERT INTO events (candidate_id, type, message, created_at) VALUES (?, ?, ?, ?)').run(candidateId, type, message, at);
+  db.prepare('INSERT INTO events (candidate_id, type, message, actor, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(candidateId, type, message, currentUser()?.name ?? null, at);
 }
 
 export function getJob(id) {
   const row = db.prepare(`
-    SELECT j.*, c.name AS company_name FROM jobs j JOIN companies c ON c.id = j.company_id WHERE j.id = ?
-  `).get(id);
+    SELECT j.*, c.name AS company_name FROM jobs j JOIN companies c ON c.id = j.company_id
+    WHERE j.id = ? AND j.workspace_id = ?
+  `).get(id, workspaceId());
   return row ? toJob(row) : null;
 }
 
 export function getApplication(id) {
   return db.prepare(`
-    SELECT id, candidate_id, job_id, stage, match_score, created_at, updated_at FROM applications WHERE id = ?
-  `).get(id) ?? null;
+    SELECT a.id, a.candidate_id, a.job_id, a.stage, a.match_score, a.created_at, a.updated_at
+    FROM applications a JOIN candidates c ON c.id = a.candidate_id
+    WHERE a.id = ? AND c.workspace_id = ?
+  `).get(id, workspaceId()) ?? null;
 }
 
 export function getCandidateDetail(id) {
-  const row = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+  const row = db.prepare('SELECT * FROM candidates WHERE id = ? AND workspace_id = ?').get(id, workspaceId());
   if (!row) return null;
 
   const applications = db.prepare(`
@@ -45,7 +51,7 @@ export function getCandidateDetail(id) {
   `).all(id);
 
   const events = db.prepare(`
-    SELECT id, type, message, created_at FROM events WHERE candidate_id = ? ORDER BY created_at DESC, id DESC
+    SELECT id, type, message, actor, created_at FROM events WHERE candidate_id = ? ORDER BY created_at DESC, id DESC
   `).all(id);
 
   return {
@@ -62,15 +68,18 @@ export function getCandidateDetail(id) {
 // Insert a new candidate, or merge into the existing one with the same email (returning candidate).
 export function upsertCandidate(parsed, file = {}, at = now()) {
   return tx(() => {
-    const existing = parsed.email ? db.prepare('SELECT * FROM candidates WHERE email = ?').get(parsed.email) : null;
+    const ws = workspaceId();
+    const existing = parsed.email
+      ? db.prepare('SELECT * FROM candidates WHERE workspace_id = ? AND email = ?').get(ws, parsed.email)
+      : null;
 
     if (!existing) {
       const { lastInsertRowid } = db.prepare(`
-        INSERT INTO candidates (name, email, phone, location, years_experience, education, primary_role, skills,
+        INSERT INTO candidates (workspace_id, name, email, phone, location, years_experience, education, primary_role, skills,
                                 resume_text, resume_file, resume_filename, times_applied, created_at, last_applied_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(
-        parsed.name, parsed.email, parsed.phone, parsed.location, parsed.years_experience, parsed.education,
+        ws, parsed.name, parsed.email, parsed.phone, parsed.location, parsed.years_experience, parsed.education,
         parsed.primary_role, JSON.stringify(parsed.skills), parsed.resume_text,
         file.stored ?? null, file.original ?? null, at, at,
       );
@@ -115,7 +124,7 @@ export function upsertCandidate(parsed, file = {}, at = now()) {
 
 export function addApplication(candidateId, jobId, at = now()) {
   return tx(() => {
-    const candidate = db.prepare('SELECT id, skills FROM candidates WHERE id = ?').get(candidateId);
+    const candidate = db.prepare('SELECT id, skills FROM candidates WHERE id = ? AND workspace_id = ?').get(candidateId, workspaceId());
     const job = getJob(jobId);
     if (!candidate) throw new HttpError(404, 'Candidate not found');
     if (!job) throw new HttpError(404, 'Job not found');
@@ -155,7 +164,9 @@ export function addNote(candidateId, { application_id, round, author, rating, bo
   }
 
   return tx(() => {
-    if (!db.prepare('SELECT 1 FROM candidates WHERE id = ?').get(candidateId)) throw new HttpError(404, 'Candidate not found');
+    if (!db.prepare('SELECT 1 FROM candidates WHERE id = ? AND workspace_id = ?').get(candidateId, workspaceId())) {
+      throw new HttpError(404, 'Candidate not found');
+    }
 
     let appId = null;
     let roundName = round ? String(round).trim() : null;
@@ -165,7 +176,7 @@ export function addNote(candidateId, { application_id, round, author, rating, bo
       appId = app.id;
       roundName ??= app.stage;
     }
-    const who = author ? String(author).trim() : 'Recruiter';
+    const who = (author ? String(author).trim() : '') || currentUser()?.name || 'Recruiter';
 
     const { lastInsertRowid } = db.prepare(`
       INSERT INTO notes (candidate_id, application_id, round, author, rating, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -183,20 +194,24 @@ export function addNote(candidateId, { application_id, round, author, rating, bo
 export function createCompany({ name, industry } = {}, at = now()) {
   const n = String(name ?? '').trim();
   if (!n) throw new HttpError(400, 'name is required');
-  if (db.prepare('SELECT 1 FROM companies WHERE name = ?').get(n)) throw new HttpError(409, 'Company already exists');
-  const { lastInsertRowid } = db.prepare('INSERT INTO companies (name, industry, created_at) VALUES (?, ?, ?)')
-    .run(n, industry ? String(industry).trim() : null, at);
+  const ws = workspaceId();
+  if (db.prepare('SELECT 1 FROM companies WHERE workspace_id = ? AND name = ?').get(ws, n)) throw new HttpError(409, 'Company already exists');
+  const { lastInsertRowid } = db.prepare('INSERT INTO companies (workspace_id, name, industry, created_at) VALUES (?, ?, ?, ?)')
+    .run(ws, n, industry ? String(industry).trim() : null, at);
   return { id: Number(lastInsertRowid), name: n, industry: industry ?? null, job_count: 0 };
 }
 
 export function createJob({ company_id, title, required_skills, description, status = 'open' } = {}, at = now()) {
   const t = String(title ?? '').trim();
   if (!t) throw new HttpError(400, 'title is required');
-  if (!db.prepare('SELECT 1 FROM companies WHERE id = ?').get(Number(company_id))) throw new HttpError(400, 'company_id is invalid');
+  const ws = workspaceId();
+  if (!db.prepare('SELECT 1 FROM companies WHERE id = ? AND workspace_id = ?').get(Number(company_id), ws)) {
+    throw new HttpError(400, 'company_id is invalid');
+  }
   if (!['open', 'closed'].includes(status)) throw new HttpError(400, 'status must be open or closed');
 
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO jobs (company_id, title, required_skills, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?)
-  `).run(Number(company_id), t, JSON.stringify(normalizeSkills(required_skills)), description ?? null, status, at);
+    INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(ws, Number(company_id), t, JSON.stringify(normalizeSkills(required_skills)), description ?? null, status, at);
   return getJob(Number(lastInsertRowid));
 }

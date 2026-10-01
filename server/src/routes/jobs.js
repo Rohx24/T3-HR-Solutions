@@ -4,6 +4,7 @@ import { STAGES, normalizeSkills } from '../skills.js';
 import { scoreMatch } from '../matching.js';
 import { createJob, getJob } from '../services.js';
 import { idParam } from './util.js';
+import { workspaceId } from '../context.js';
 
 const router = Router();
 
@@ -23,8 +24,9 @@ function requireJob(req) {
 router.get('/', (req, res) => {
   const rows = db.prepare(`
     SELECT j.*, c.name AS company_name FROM jobs j JOIN companies c ON c.id = j.company_id
+    WHERE j.workspace_id = ?
     ORDER BY (j.status = 'open') DESC, j.created_at DESC
-  `).all();
+  `).all(workspaceId());
   res.json(rows.map(toJob).map(withCounts));
 });
 
@@ -76,8 +78,9 @@ router.get('/:id/matches', (req, res) => {
   const job = requireJob(req);
   const limit = Math.min(Number(req.query.limit) || 10, 50);
   const rows = db.prepare(`
-    SELECT * FROM candidates WHERE id NOT IN (SELECT candidate_id FROM applications WHERE job_id = ?)
-  `).all(job.id);
+    SELECT * FROM candidates
+    WHERE workspace_id = ? AND id NOT IN (SELECT candidate_id FROM applications WHERE job_id = ?)
+  `).all(workspaceId(), job.id);
 
   const matches = rows
     .map((r) => {
