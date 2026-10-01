@@ -139,6 +139,38 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_interviews_app ON interviews(application_id);
   CREATE INDEX IF NOT EXISTS idx_interviews_time ON interviews(scheduled_at);
+
+  -- Phone calls with a candidate: recorded live, uploaded, or typed as notes. The AI turns the
+  -- recording into a transcript, a summary and structured details (salary, notice period...).
+  CREATE TABLE IF NOT EXISTS calls (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id     INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    application_id   INTEGER REFERENCES applications(id) ON DELETE SET NULL,
+    method           TEXT NOT NULL CHECK (method IN ('recorded', 'uploaded', 'typed')),
+    audio_file       TEXT,
+    audio_name       TEXT,
+    duration_seconds INTEGER,
+    notes            TEXT,
+    transcript       TEXT,
+    summary          TEXT,
+    insights         TEXT,
+    status           TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('processing', 'done', 'failed')),
+    error            TEXT,
+    recorded_by      TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_calls_candidate ON calls(candidate_id, created_at);
+
+  -- One-time links that let a client's interviewer submit round feedback without an account.
+  CREATE TABLE IF NOT EXISTS feedback_links (
+    token_hash   TEXT PRIMARY KEY,
+    interview_id INTEGER NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+    created_by   TEXT,
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    used_at      TEXT
+  );
 `);
 
 // Additive migrations: add columns to existing databases without touching any data.
@@ -146,6 +178,11 @@ for (const [table, column, type] of [
   ['candidates', 'profile', 'TEXT'], // full structured profile from the AI parser (JSON)
   ['candidates', 'parsed_by', 'TEXT'], // "gpt-4o-mini" or "rules"
   ['jobs', 'rounds', 'TEXT'], // JSON list of this job's interview rounds
+  ['candidates', 'source', 'TEXT'], // where the candidate came from: Naukri, LinkedIn, Referral...
+  ['candidates', 'source_detail', 'TEXT'], // e.g. who referred them
+  ['notes', 'decision', 'TEXT'], // round result: Passed / Not passed / On hold
+  ['notes', 'evaluator_company', 'TEXT'], // which company's interviewer gave the feedback
+  ['notes', 'interview_id', 'INTEGER'],
 ]) {
   const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
   if (!has) {
@@ -197,6 +234,8 @@ export const toCandidate = (r) => ({
   skills: parseList(r.skills),
   times_applied: r.times_applied,
   application_count: r.application_count ?? 0,
+  source: r.source ?? null,
+  source_detail: r.source_detail ?? null,
   created_at: r.created_at,
   last_applied_at: r.last_applied_at,
 });

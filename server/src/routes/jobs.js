@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db, toJob, toCandidate, parseList, HttpError } from '../db.js';
 import { normalizeSkills } from '../skills.js';
 import { scoreMatch } from '../matching.js';
-import { createJob, getJob, listInterviews, updateRounds } from '../services.js';
+import { createJob, feedbackForJob, getJob, listInterviews, updateRounds } from '../services.js';
 import { idParam } from './util.js';
 import { workspaceId } from '../context.js';
 
@@ -62,7 +62,11 @@ router.get('/:id', (req, res) => {
     if (!byApp.has(iv.application_id)) byApp.set(iv.application_id, []);
     byApp.get(iv.application_id).push(iv);
   }
-  res.json({ ...withCounts(job), applications: applications.map((a) => ({ ...a, interviews: byApp.get(a.id) ?? [] })) });
+  const feedback = feedbackForJob(job.id);
+  res.json({
+    ...withCounts(job),
+    applications: applications.map((a) => ({ ...a, interviews: byApp.get(a.id) ?? [], feedback: feedback.get(a.id) ?? [] })),
+  });
 });
 
 router.patch('/:id', (req, res) => {

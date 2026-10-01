@@ -45,6 +45,10 @@ router.get('/stats', (req, res) => {
         : byStage[stage] ?? 0,
     })),
     upcoming_interviews: listInterviews({ upcoming: true, limit: 8 }),
+    sources: db.prepare(`
+      SELECT COALESCE(NULLIF(source, ''), 'Not recorded') AS source, COUNT(*) AS count FROM candidates
+      WHERE workspace_id = ? GROUP BY 1 ORDER BY count DESC, source
+    `).all(ws),
     top_skills: skillCounts().slice(0, 10),
     roles: db.prepare(`
       SELECT primary_role AS role, COUNT(*) AS count FROM candidates WHERE workspace_id = ?

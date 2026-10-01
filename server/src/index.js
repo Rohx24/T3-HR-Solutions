@@ -13,6 +13,9 @@ import stats from './routes/stats.js';
 import auth from './routes/auth.js';
 import workspace from './routes/workspace.js';
 import interviews from './routes/interviews.js';
+import calls from './routes/calls.js';
+import publicRoutes from './routes/public.js';
+import { failStaleCalls } from './calls.js';
 import { requireAuth } from './auth.js';
 import { connectRedis, disconnectRedis, redisStatus } from './redis.js';
 import { apiCache } from './cache.js';
@@ -27,6 +30,7 @@ const INSTANCE = process.env.INSTANCE_NAME || os.hostname();
 connectRedis();
 
 await seedIfEmpty();
+failStaleCalls();
 
 const app = express();
 app.disable('x-powered-by');
@@ -63,6 +67,8 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, instance: INSTANCE, cache: redisStatus(), uptime_s: Math.round(process.uptime()) });
 });
 app.use('/api/auth', auth);
+// No login needed: the client interviewer's feedback form.
+app.use('/api/public', publicRoutes);
 // Everything below requires a session and only sees the signed-in user's workspace.
 app.use('/api', requireAuth);
 app.use('/api', apiCache);
@@ -73,6 +79,7 @@ app.use('/api/companies', companies);
 app.use('/api/applications', applications);
 app.use('/api/workspace', workspace);
 app.use('/api/interviews', interviews);
+app.use('/api/calls', calls);
 app.use('/api', (req, res) => res.status(404).json({ error: `No route for ${req.method} ${req.originalUrl}` }));
 
 // Production: serve the built React app from the same origin.

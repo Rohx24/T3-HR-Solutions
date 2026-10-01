@@ -11,6 +11,8 @@ RUN if [ -f client/package.json ]; then \
 # Stage 2: API server that also serves client/dist
 FROM node:24-slim
 ENV NODE_ENV=production PORT=4000
+# ffmpeg converts call recordings (amr, 3gp, m4a, webm...) to compact speech audio for transcription.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci --omit=dev

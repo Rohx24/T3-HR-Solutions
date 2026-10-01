@@ -3,6 +3,7 @@ import { db, tx, now, parseList, toCandidate, toJob, HttpError, DEFAULT_ROUNDS, 
 import { normalizeSkills } from './skills.js';
 import { scoreMatch } from './matching.js';
 import { workspaceId, currentUser } from './context.js';
+import { listCalls } from './calls.js';
 
 const parseProfile = (json) => {
   if (!json) return null;
@@ -53,7 +54,7 @@ export function getCandidateDetail(id) {
   });
 
   const notes = db.prepare(`
-    SELECT n.id, n.application_id, j.title AS job_title, n.round, n.author, n.rating, n.body, n.created_at
+    SELECT n.id, n.application_id, j.title AS job_title, n.round, n.author, n.rating, n.body, n.decision, n.evaluator_company, n.interview_id, n.created_at
     FROM notes n
     LEFT JOIN applications a ON a.id = n.application_id
     LEFT JOIN jobs j ON j.id = a.job_id
@@ -74,6 +75,7 @@ export function getCandidateDetail(id) {
     parsed_by: row.parsed_by ?? 'rules',
     applications,
     interviews: listInterviews({ candidateId: id, limit: 100 }),
+    calls: listCalls(id),
     notes,
     events,
   };
@@ -174,13 +176,17 @@ export function moveStage(applicationId, stage, at = now()) {
   });
 }
 
-export function addNote(candidateId, { application_id, round, author, rating, body } = {}, at = now()) {
+const DECISIONS = ['Passed', 'Not passed', 'On hold'];
+
+export function addNote(candidateId, { application_id, round, author, rating, body, decision, evaluator_company, interview_id } = {}, at = now()) {
   const text = String(body ?? '').trim();
   if (!text) throw new HttpError(400, 'body is required');
   const stars = rating === undefined || rating === null || rating === '' ? null : Number(rating);
   if (stars !== null && !(Number.isInteger(stars) && stars >= 1 && stars <= 5)) {
     throw new HttpError(400, 'rating must be an integer from 1 to 5');
   }
+  const result = decision === undefined || decision === null || decision === '' ? null : String(decision);
+  if (result !== null && !DECISIONS.includes(result)) throw new HttpError(400, `decision must be one of: ${DECISIONS.join(', ')}`);
 
   return tx(() => {
     if (!db.prepare('SELECT 1 FROM candidates WHERE id = ? AND workspace_id = ?').get(candidateId, workspaceId())) {
@@ -198,12 +204,15 @@ export function addNote(candidateId, { application_id, round, author, rating, bo
     const who = (author ? String(author).trim() : '') || currentUser()?.name || 'Recruiter';
 
     const { lastInsertRowid } = db.prepare(`
-      INSERT INTO notes (candidate_id, application_id, round, author, rating, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(candidateId, appId, roundName, who, stars, text, at);
-    addEvent(candidateId, 'note', `${who} commented on ${roundName ?? 'General'} round${stars ? ` (${stars}/5)` : ''}`, at);
+      INSERT INTO notes (candidate_id, application_id, round, author, rating, body, decision, evaluator_company, interview_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(candidateId, appId, roundName, who, stars, text, result,
+      evaluator_company ? String(evaluator_company).trim().slice(0, 80) : null, interview_id ? Number(interview_id) : null, at);
+    const verdict = result ? `: ${result}` : '';
+    addEvent(candidateId, 'note', `${who} gave ${roundName ?? 'General'} feedback${verdict}${stars ? ` (${stars}/5)` : ''}`, at);
 
     return db.prepare(`
-      SELECT n.id, n.application_id, j.title AS job_title, n.round, n.author, n.rating, n.body, n.created_at
+      SELECT n.id, n.application_id, j.title AS job_title, n.round, n.author, n.rating, n.body, n.decision, n.evaluator_company, n.interview_id, n.created_at
       FROM notes n LEFT JOIN applications a ON a.id = n.application_id LEFT JOIN jobs j ON j.id = a.job_id
       WHERE n.id = ?
     `).get(Number(lastInsertRowid));
@@ -265,8 +274,11 @@ export function createJob({ company_id, title, required_skills, description, sta
 export function clearWorkspace() {
   const ws = workspaceId();
   return tx(() => {
-    const files = db.prepare('SELECT resume_file FROM candidates WHERE workspace_id = ? AND resume_file IS NOT NULL')
-      .all(ws).map((r) => r.resume_file);
+    const files = [
+      ...db.prepare('SELECT resume_file AS f FROM candidates WHERE workspace_id = ? AND resume_file IS NOT NULL').all(ws),
+      ...db.prepare(`SELECT ca.audio_file AS f FROM calls ca JOIN candidates c ON c.id = ca.candidate_id
+                     WHERE c.workspace_id = ? AND ca.audio_file IS NOT NULL`).all(ws),
+    ].map((r) => r.f);
     const candidates = db.prepare('DELETE FROM candidates WHERE workspace_id = ?').run(ws).changes;
     const jobs = db.prepare('DELETE FROM jobs WHERE workspace_id = ?').run(ws).changes;
     const companies = db.prepare('DELETE FROM companies WHERE workspace_id = ?').run(ws).changes;
@@ -371,5 +383,29 @@ export function updateInterview(id, { status, scheduled_at, completed_at, durati
     else if (scheduled_at !== undefined && next.scheduled_at !== iv.scheduled_at) addEvent(iv.candidate_id, 'interview', `${what} rescheduled`, at);
     return getInterview(id);
   });
+}
+
+// Where the candidate came from (Naukri, LinkedIn, Referral...) and an optional detail such as the referrer.
+export function updateCandidateSource(candidateId, { source, source_detail } = {}) {
+  const row = db.prepare('SELECT id FROM candidates WHERE id = ? AND workspace_id = ?').get(candidateId, workspaceId());
+  if (!row) throw new HttpError(404, 'Candidate not found');
+  const src = source ? String(source).trim().slice(0, 60) : null;
+  const detail = source_detail ? String(source_detail).trim().slice(0, 120) : null;
+  db.prepare('UPDATE candidates SET source = ?, source_detail = ? WHERE id = ?').run(src, detail, candidateId);
+}
+
+// Feedback given on a job's applications, grouped by application (for the job's hiring board).
+export function feedbackForJob(jobId) {
+  const rows = db.prepare(`
+    SELECT n.id, n.application_id, n.round, n.author, n.rating, n.body, n.decision, n.evaluator_company, n.interview_id, n.created_at
+    FROM notes n JOIN applications a ON a.id = n.application_id
+    WHERE a.job_id = ? ORDER BY n.created_at DESC, n.id DESC
+  `).all(jobId);
+  const by = new Map();
+  for (const r of rows) {
+    if (!by.has(r.application_id)) by.set(r.application_id, []);
+    by.get(r.application_id).push(r);
+  }
+  return by;
 }
 

@@ -6,9 +6,11 @@ import multer from 'multer';
 import { db, toCandidate, UPLOAD_DIR, HttpError } from '../db.js';
 import { extractText, ALLOWED_EXTENSIONS } from '../parser.js';
 import { parseResumeSmart } from '../aiParser.js';
-import { upsertCandidate, addApplication, addNote, getCandidateDetail, getJob } from '../services.js';
+import { upsertCandidate, addApplication, addNote, getCandidateDetail, getJob, updateCandidateSource } from '../services.js';
 import { toCsv } from '../csv.js';
 import { rateLimit } from '../ratelimit.js';
+import { createCall, getCallScoped, processCall, toCall } from '../calls.js';
+import { runAs } from '../context.js';
 import { idParam } from './util.js';
 import { workspaceId, bindContext } from '../context.js';
 
@@ -38,8 +40,9 @@ function searchCandidates(query) {
            OR c.location LIKE $like OR c.skills LIKE $like OR c.resume_text LIKE $like)
       AND ($role IS NULL OR c.primary_role = $role)
       AND ($skill IS NULL OR c.skills LIKE $skillLike)
+      AND ($source IS NULL OR c.source = $source)
     ORDER BY c.last_applied_at DESC
-  `).all({ ws: workspaceId(), q, like: `%${q}%`, role, skill, skillLike: `%"${skill}"%` }).map(toCandidate);
+  `).all({ ws: workspaceId(), q, like: `%${q}%`, role, skill, skillLike: `%"${skill}"%`, source: query.source?.trim() || null }).map(toCandidate);
 }
 
 // GET /api/candidates?q=&skill=&role=
@@ -83,6 +86,7 @@ router.post('/upload', uploadLimit, upload.single('resume'), bindContext, async 
   fs.writeFileSync(path.join(UPLOAD_DIR, stored), req.file.buffer);
 
   const { id, returning } = upsertCandidate(parsed, { stored, original: req.file.originalname });
+  if (req.body?.source) updateCandidateSource(id, { source: req.body.source, source_detail: req.body.source_detail });
 
   let application = null;
   if (jobId) {
@@ -116,6 +120,51 @@ router.get('/:id/resume', (req, res) => {
 
 router.post('/:id/notes', (req, res) => {
   res.status(201).json(addNote(idParam(req), req.body));
+});
+
+// PATCH /api/candidates/:id  { source, source_detail }
+router.patch('/:id', (req, res) => {
+  const id = idParam(req);
+  updateCandidateSource(id, req.body ?? {});
+  res.json(getCandidateDetail(id));
+});
+
+// ---------- calls: live recording, uploaded recording, or typed notes ----------
+
+const AUDIO_EXT = ['.webm', '.ogg', '.oga', '.opus', '.mp3', '.m4a', '.mp4', '.aac', '.wav', '.amr', '.3gp', '.3gpp', '.flac', '.mpeg', '.mpga', '.wma'];
+const audioUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (req, file, cb) => cb(null, `call-${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase() || '.webm'}`),
+  }),
+  limits: { fileSize: 80 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const ok = file.mimetype.startsWith('audio/') || file.mimetype === 'video/mp4' || file.mimetype === 'video/webm' || AUDIO_EXT.includes(ext);
+    cb(ok ? null : new HttpError(400, 'Please choose an audio recording (mp3, m4a, wav, amr, 3gp, ogg or webm)'), ok);
+  },
+});
+const callLimit = rateLimit({ name: 'call', max: 20, windowSec: 60, key: (req) => req.user?.id ?? req.ip });
+
+// POST /api/candidates/:id/calls  multipart: audio? (file), method (recorded|uploaded|typed), notes?, application_id?
+router.post('/:id/calls', callLimit, audioUpload.single('audio'), bindContext, (req, res) => {
+  const method = req.file ? (req.body?.method === 'recorded' ? 'recorded' : 'uploaded') : 'typed';
+  const id = createCall({
+    candidateId: idParam(req),
+    applicationId: req.body?.application_id ? Number(req.body.application_id) : null,
+    method,
+    audioFile: req.file?.filename,
+    audioName: req.file ? (method === 'recorded' ? 'Live recording' : req.file.originalname) : null,
+    notes: req.body?.notes,
+    recordedBy: req.user?.name,
+  });
+  const call = getCallScoped(id);
+  if (call.status === 'processing') {
+    const ctx = req.ctx;
+    setImmediate(() => runAs(ctx, () => processCall(id)));
+  }
+  const { audio_file, ...safe } = call;
+  res.status(202).json(toCall(safe));
 });
 
 export default router;

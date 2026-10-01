@@ -26,6 +26,11 @@ const RULES = [
 export const ttlFor = (path) => RULES.find(([re]) => re.test(path))?.[1] ?? null;
 export const versionKey = (workspaceId) => `hr:ws:${workspaceId}:v`;
 
+// For writes that happen outside a request (e.g. a call finishing processing in the background).
+export async function invalidateWorkspace(workspaceId) {
+  await getRedis()?.incr(versionKey(workspaceId)).catch(() => {});
+}
+
 const WRITES = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 
 // Mounted after requireAuth, so req.user (and its workspace) is known.
