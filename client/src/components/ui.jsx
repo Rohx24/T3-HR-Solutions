@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { STAGES, stageSlug } from '../utils.js'
 
 export function PageHeader({ title, subtitle, actions, back }) {
@@ -138,7 +139,9 @@ export function Modal({ open, title, onClose, children, wide }) {
   }, [open, onClose])
 
   if (!open) return null
-  return (
+  // Portal to <body>: an animated (transformed) page ancestor would otherwise trap position:fixed,
+  // placing the dialog relative to the page instead of the viewport.
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
@@ -149,6 +152,7 @@ export function Modal({ open, title, onClose, children, wide }) {
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

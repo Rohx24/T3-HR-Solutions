@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks.js'
-import { formatYears } from '../utils.js'
+import { formatYears, formatBytes } from '../utils.js'
 import { SOURCES } from '../sources.js'
 import { useToast } from './Toast.jsx'
 import { Modal, ReturningBadge, SkillChips, StageBadge } from './ui.jsx'
@@ -112,7 +112,7 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
             {file ? (
               <>
                 <strong>{file.name}</strong>
-                <span className="muted small">{(file.size / 1024).toFixed(0)} KB · click to change</span>
+                <span className="muted small">{formatBytes(file.size)} · click to change</span>
               </>
             ) : (
               <>

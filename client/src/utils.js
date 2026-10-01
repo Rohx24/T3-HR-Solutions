@@ -48,3 +48,9 @@ export function parseSkills(text) {
     .map((s) => s.trim())
     .filter((s) => s && !seen.has(s.toLowerCase()) && seen.add(s.toLowerCase()))
 }
+
+export function formatBytes(n = 0) {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}

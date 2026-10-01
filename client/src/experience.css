@@ -10,7 +10,7 @@
 .reveal.in-view { opacity: 1; transform: none; }
 
 /* ---------- landing ---------- */
-.landing { background: var(--surface); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+.landing { background: var(--surface); color: var(--text); min-height: calc(100vh / var(--zoom)); overflow-x: hidden; }
 .utility-bar { display: flex; justify-content: space-between; gap: 12px; padding: 9px clamp(16px, 4vw, 64px); background: var(--grad); color: #fff; font-size: 13px; font-weight: 600; }
 .utility-bar a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .land-nav { position: sticky; top: 0; z-index: 20; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px clamp(16px, 4vw, 64px); background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
@@ -77,7 +77,7 @@
 .land-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 26px clamp(16px, 4vw, 64px); background: #161a29; color: #8a91a3; font-size: 13px; }
 
 /* ---------- auth ---------- */
-.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100vh; }
+.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: calc(100vh / var(--zoom)); }
 .auth-art {
   position: relative; overflow: hidden; color: #fff; padding: 36px clamp(24px, 4vw, 64px);
   display: flex; flex-direction: column; justify-content: space-between; gap: 40px;

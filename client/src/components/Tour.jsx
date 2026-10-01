@@ -150,8 +150,10 @@ function TourOverlay({ index, setIndex, onClose }) {
         if (el) bringIntoView(el)
       }
       if (el) {
+        // Rects come back in zoomed pixels; the overlay is positioned in CSS pixels (see --zoom in styles.css).
+        const z = uiZoom()
         const r = el.getBoundingClientRect()
-        setRect({ top: r.top - PAD, left: r.left - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 })
+        setRect({ top: r.top / z - PAD, left: r.left / z - PAD, width: r.width / z + PAD * 2, height: r.height / z + PAD * 2 })
       } else if (tries++ > 180) {
         setRect('missing')
         return
@@ -214,19 +216,24 @@ function TourOverlay({ index, setIndex, onClose }) {
   )
 }
 
+// Large screens scale the whole UI with CSS zoom on <html>; 1 everywhere else.
+function uiZoom() {
+  return parseFloat(getComputedStyle(document.documentElement).zoom) || 1
+}
+
 // Scroll page content so its top sits just under the sticky top bar, leaving room for the card below.
 // Elements in the sidebar/top bar are always visible, so they are left alone.
 function bringIntoView(el) {
   if (el.closest('.sidebar, .topbar')) return
-  const top = window.scrollY + el.getBoundingClientRect().top - 96
+  const top = window.scrollY + el.getBoundingClientRect().top - 96 * uiZoom()
   window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
 }
 
 // Place the card below the highlight, else above, else beside it, else docked bottom-right.
 function cardPosition(box) {
   if (!box) return {}
-  const vw = window.innerWidth
-  const vh = window.innerHeight
+  const vw = window.innerWidth / uiZoom()
+  const vh = window.innerHeight / uiZoom()
   const W = Math.min(360, vw - 32)
   const H = 260
   const GAP = 14

@@ -89,7 +89,7 @@
 .seg-btn.on.on-hold { background: #e59a1a; color: #fff; }
 
 /* ---------- public feedback page ---------- */
-.public-page { min-height: 100vh; background: var(--bg); }
+.public-page { min-height: calc(100vh / var(--zoom)); background: var(--bg); }
 .public-head { background: var(--surface); border-bottom: 1px solid var(--line); border-top: 3px solid var(--blue); padding: 14px 24px; }
 .public-main { display: grid; place-items: start center; padding: 40px 16px; }
 .public-card { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 16px; }

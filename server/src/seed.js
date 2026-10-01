@@ -5,9 +5,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { db, tx, UPLOAD_DIR } from './db.js';
 import { parseResume } from './parser.js';
-import { upsertCandidate, addApplication, moveStage, addNote, createCompany, createJob } from './services.js';
+import { upsertCandidate, addApplication, moveStage, addNote, createCompany, createJob, updateCandidateSource } from './services.js';
 import { createAccount, findUserByEmail, hashPassword } from './auth.js';
-import { runAs } from './context.js';
+import { runAs, workspaceId } from './context.js';
 
 const RESUMES = {
   priya2024: `Priya Sharma
@@ -102,6 +102,22 @@ Education: B.Tech Computer Science`,
 
 const d = (s) => new Date(s).toISOString();
 const candidate = (key, at) => upsertCandidate(parseResume(RESUMES[key]), {}, d(at)).id;
+// Seeded feedback is attributed to its reviewer (not to whoever is signed in), so the history reads naturally.
+const addNoteAs = (candidateId, data, at) =>
+  runAs({ workspaceId: workspaceId(), user: { id: null, name: data.author } }, () => addNote(candidateId, data, at));
+
+const SOURCES = {
+  'priya.sharma@example.com': ['Naukri'],
+  'karthik.rao@example.com': ['LinkedIn'],
+  'ananya.iyer@example.com': ['Referral', 'Referred by a Nimbus engineer'],
+  'rahul.verma@example.com': ['LinkedIn'],
+  'sneha.kulkarni@example.com': ['Company website'],
+  'vikram.singh@example.com': ['Naukri'],
+  'meera.nair@example.com': ['Referral', 'Ex-colleague of the hiring manager'],
+  'rohan.das@example.com': ['Job fair'],
+  'divya.menon@example.com': ['Campus'],
+  'siddharth.jain@example.com': ['Indeed'],
+};
 
 export function seed() {
   tx(() => {
@@ -130,13 +146,13 @@ export function seed() {
     const priya = candidate('priya2024', '2024-08-12');
     const pApp = addApplication(priya, orbitJava, d('2024-08-14')).id;
     moveStage(pApp, 'Screening', d('2024-08-16'));
-    addNote(priya, { application_id: pApp, author: 'Rohit', rating: 4, body: 'Clear communicator, 3 yrs Spring Boot. Move to technical.' }, d('2024-08-16'));
+    addNoteAs(priya, { application_id: pApp, author: 'Anjali (Recruiter)', rating: 4, body: 'Clear communicator, 3 yrs Spring Boot. Move to technical.' }, d('2024-08-16'));
     moveStage(pApp, 'Technical', d('2024-08-21'));
-    addNote(priya, { application_id: pApp, author: 'Ananth (Tech Panel)', rating: 4, body: 'Strong on REST + JPA. Needs more exposure to messaging (Kafka).' }, d('2024-08-21'));
+    addNoteAs(priya, { application_id: pApp, author: 'Ananth (Tech Panel)', rating: 4, body: 'Strong on REST + JPA. Needs more exposure to messaging (Kafka).' }, d('2024-08-21'));
     moveStage(pApp, 'HR Round', d('2024-08-26'));
     moveStage(pApp, 'Offer', d('2024-08-30'));
     moveStage(pApp, 'Rejected', d('2024-09-05'));
-    addNote(priya, { application_id: pApp, round: 'Offer', author: 'Rohit', body: 'Declined offer: accepted counter-offer from Infosys. Great profile, re-engage later.' }, d('2024-09-05'));
+    addNoteAs(priya, { application_id: pApp, round: 'Offer', author: 'Anjali (Recruiter)', body: 'Declined offer: accepted counter-offer from Infosys. Great profile, re-engage later.' }, d('2024-09-05'));
 
     // Vikram applied in 2024 and came back in Dec 2025 with an updated resume (returning candidate).
     candidate('vikram2024', '2024-11-05');
@@ -149,21 +165,21 @@ export function seed() {
     const karthik = candidate('karthik', '2026-09-21');
     const kApp = addApplication(karthik, acmeJava, d('2026-09-21')).id;
     moveStage(kApp, 'Screening', d('2026-09-23'));
-    addNote(karthik, { application_id: kApp, author: 'Rohit', rating: 4, body: 'Solid payments + microservices background. Notice period 30 days.' }, d('2026-09-23'));
+    addNoteAs(karthik, { application_id: kApp, author: 'Anjali (Recruiter)', rating: 4, body: 'Solid payments + microservices background. Notice period 30 days.' }, d('2026-09-23'));
     moveStage(kApp, 'Technical', d('2026-09-26'));
-    addNote(karthik, { application_id: kApp, author: 'Ananth (Tech Panel)', rating: 4, body: 'Good Kafka depth; system design was average. Recommend HR round.' }, d('2026-09-26'));
+    addNoteAs(karthik, { application_id: kApp, author: 'Ananth (Tech Panel)', rating: 4, body: 'Good Kafka depth; system design was average. Recommend HR round.' }, d('2026-09-26'));
 
     const sid = candidate('siddharth', '2026-09-22');
     const sApp = addApplication(sid, acmeJava, d('2026-09-22')).id;
     moveStage(sApp, 'Screening', d('2026-09-24'));
     moveStage(sApp, 'Rejected', d('2026-09-24'));
-    addNote(sid, { application_id: sApp, round: 'Screening', author: 'Sushrith', rating: 3, body: 'Only 1 yr experience; role needs 4+. Keep in pool for junior openings.' }, d('2026-09-24'));
+    addNoteAs(sid, { application_id: sApp, round: 'Screening', author: 'Vivek (Recruiter)', rating: 3, body: 'Only 1 yr experience; role needs 4+. Keep in pool for junior openings.' }, d('2026-09-24'));
 
     // Nimbus: Python Backend Engineer
     const ananya = candidate('ananya', '2026-09-19');
     const aApp = addApplication(ananya, nimbusPy, d('2026-09-19')).id;
     moveStage(aApp, 'Screening', d('2026-09-25'));
-    addNote(ananya, { application_id: aApp, author: 'Sushrith', rating: 5, body: 'Exact stack match (Django + Postgres + Celery). Fast-track to technical.' }, d('2026-09-25'));
+    addNoteAs(ananya, { application_id: aApp, author: 'Vivek (Recruiter)', rating: 5, body: 'Exact stack match (Django + Postgres + Celery). Fast-track to technical.' }, d('2026-09-25'));
 
     const divya = candidate('divya', '2026-09-28');
     addApplication(divya, nimbusPy, d('2026-09-28'));
@@ -173,16 +189,21 @@ export function seed() {
     const rApp = addApplication(rahul, orbitFe, d('2026-09-16')).id;
     moveStage(rApp, 'Screening', d('2026-09-17'));
     moveStage(rApp, 'Technical', d('2026-09-20'));
-    addNote(rahul, { application_id: rApp, author: 'Ananth (Tech Panel)', rating: 5, body: 'Excellent React/TS fundamentals, clean component design, good testing habits.' }, d('2026-09-20'));
+    addNoteAs(rahul, { application_id: rApp, author: 'Ananth (Tech Panel)', rating: 5, body: 'Excellent React/TS fundamentals, clean component design, good testing habits.' }, d('2026-09-20'));
     moveStage(rApp, 'HR Round', d('2026-09-24'));
-    addNote(rahul, { application_id: rApp, author: 'Rohit', rating: 4, body: 'Expected CTC within band. Can join in 3 weeks.' }, d('2026-09-24'));
+    addNoteAs(rahul, { application_id: rApp, author: 'Anjali (Recruiter)', rating: 4, body: 'Expected CTC within band. Can join in 3 weeks.' }, d('2026-09-24'));
     moveStage(rApp, 'Offer', d('2026-09-29'));
 
     const meera = candidate('meera', '2026-09-27');
     const mApp = addApplication(meera, orbitFe, d('2026-09-27')).id;
     moveStage(mApp, 'Screening', d('2026-09-28'));
-    addNote(meera, { application_id: mApp, author: 'Sushrith', rating: 4, body: 'Full stack, strong React. Missing Redux/Jest but quick learner.' }, d('2026-09-28'));
+    addNoteAs(meera, { application_id: mApp, author: 'Vivek (Recruiter)', rating: 4, body: 'Full stack, strong React. Missing Redux/Jest but quick learner.' }, d('2026-09-28'));
     moveStage(mApp, 'Technical', d('2026-09-30'));
+
+    for (const [email, [source, source_detail]] of Object.entries(SOURCES)) {
+      const row = db.prepare('SELECT id FROM candidates WHERE workspace_id = ? AND email = ?').get(workspaceId(), email);
+      if (row) updateCandidateSource(row.id, { source, source_detail });
+    }
   });
 }
 
