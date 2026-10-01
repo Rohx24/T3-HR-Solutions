@@ -28,6 +28,7 @@ flowchart LR
 | **Redis** | Read-through API cache and shared rate-limit counters | Faster pages, and limits that hold across replicas |
 | **SQLite (WAL)** | Source of truth, shared by both replicas on one volume, `busy_timeout` 5 s | Zero-ops for a prototype; the SQL is portable to Postgres |
 | **OpenAI GPT-4o mini** | Turns resume text into a detailed, schema-checked profile | Accurate parsing for any profession; falls back to the rule-based parser if unavailable |
+| **gpt-4o-transcribe + ffmpeg** | Call recordings (live browser recording or uploaded phone audio in any format) are converted to compact speech audio, split into 20-minute parts, transcribed, then summarised by GPT-4o mini in the background | Accurate call notes without the recruiter typing; long calls never block a request |
 
 ## 2. Multi-tenancy (every user sees only their own data)
 
