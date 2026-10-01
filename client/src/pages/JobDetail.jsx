@@ -8,6 +8,7 @@ import { MatchScore, Modal, PageHeader, PageState, ReturningBadge, SkillChips, S
 import RoundsEditor, { cleanRounds } from '../components/RoundsEditor.jsx'
 import ScheduleDialog, { formatWhen } from '../components/ScheduleDialog.jsx'
 import ApplicationPanel from '../components/ApplicationPanel.jsx'
+import JobDetails from '../components/JobDetails.jsx'
 import ShareApplyLink from '../components/ShareApplyLink.jsx'
 import HelpBox, { stageHelp } from '../components/HelpBox.jsx'
 
@@ -103,6 +104,7 @@ export default function JobDetail() {
           </div>
         </div>
         {j.description && <p className="muted">{j.description}</p>}
+        <JobDetails job={j} />
         <ShareApplyLink job={j} />
       </section>
 

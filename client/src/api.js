@@ -68,6 +68,14 @@ export const api = {
   jobs: () => request('/jobs'),
   job: (id) => request(`/jobs/${id}`),
   createJob: (data) => request('/jobs', json('POST', data)),
+  parseJobDescription: ({ text, file }) => {
+    if (file) {
+      const form = new FormData()
+      form.append('jd', file)
+      return request('/jobs/parse-description', { method: 'POST', body: form })
+    }
+    return request('/jobs/parse-description', json('POST', { text }))
+  },
   updateJob: (id, data) => request(`/jobs/${id}`, json('PATCH', data)),
   interviews: (params) => request(`/interviews${query(params)}`),
   scheduleInterview: (data) => request('/interviews', json('POST', data)),

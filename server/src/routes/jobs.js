@@ -5,6 +5,11 @@ import { scoreMatch } from '../matching.js';
 import { createJob, feedbackForJob, getJob, listInterviews, updateRounds } from '../services.js';
 import { idParam } from './util.js';
 import { workspaceId } from '../context.js';
+import path from 'node:path';
+import multer from 'multer';
+import { draftJobFromDescription } from '../jobDescription.js';
+import { extractText, ALLOWED_EXTENSIONS } from '../parser.js';
+import { rateLimit } from '../ratelimit.js';
 
 const router = Router();
 
@@ -32,6 +37,35 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   res.status(201).json(withCounts(createJob(req.body)));
+});
+
+// POST /api/jobs/parse-description  { text } or multipart "jd" file (PDF / DOCX / TXT)
+// Returns a draft job for the recruiter to review; nothing is saved.
+const jdUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const ok = ALLOWED_EXTENSIONS.includes(path.extname(file.originalname).toLowerCase());
+    cb(ok ? null : new HttpError(400, 'Upload the job description as a PDF, Word (.docx) or text file'), ok);
+  },
+});
+const jdLimit = rateLimit({ name: 'jd', max: 20, windowSec: 60, key: (req) => req.user?.id ?? req.ip });
+
+router.post('/parse-description', jdLimit, jdUpload.single('jd'), async (req, res) => {
+  let text = req.body?.text;
+  if (req.file) {
+    try {
+      text = await extractText(req.file.buffer, req.file.originalname);
+    } catch {
+      throw new HttpError(422, 'Could not read that file. Try copying the text and pasting it instead.');
+    }
+  }
+  try {
+    const result = await draftJobFromDescription(text);
+    res.json({ ...result, jd_text: String(text).trim().slice(0, 30_000) });
+  } catch (err) {
+    throw err.status ? new HttpError(err.status, err.message) : err;
+  }
 });
 
 router.get('/:id', (req, res) => {

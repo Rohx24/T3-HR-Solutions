@@ -179,6 +179,8 @@ for (const [table, column, type] of [
   ['candidates', 'profile', 'TEXT'], // full structured profile from the AI parser (JSON)
   ['candidates', 'parsed_by', 'TEXT'], // "gpt-4o-mini" or "rules"
   ['jobs', 'rounds', 'TEXT'], // JSON list of this job's interview rounds
+  ['jobs', 'details', 'TEXT'], // JSON: location, experience, salary, openings, responsibilities... (from the JD)
+  ['jobs', 'jd_text', 'TEXT'], // the client's original job description
   ['candidates', 'source', 'TEXT'], // where the candidate came from: Naukri, LinkedIn, Referral...
   ['candidates', 'source_detail', 'TEXT'], // e.g. who referred them
   ['notes', 'decision', 'TEXT'], // round result: Passed / Not passed / On hold
@@ -311,9 +313,20 @@ export const toJob = (r) => {
     rounds,
     stages: stagesFor(rounds),
     apply_token: r.apply_token,
+    details: parseDetails(r.details),
+    jd_text: r.jd_text ?? null,
     created_at: r.created_at,
   };
 };
+
+function parseDetails(json) {
+  if (!json) return null;
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
 
 export class HttpError extends Error {
   constructor(status, message) {

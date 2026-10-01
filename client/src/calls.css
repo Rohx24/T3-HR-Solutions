@@ -157,3 +157,9 @@
 .cc-tag { font-size: 11.5px; font-weight: 700; padding: 3px 8px; background: var(--applied-bg); color: var(--applied); }
 .cc-tag.ok { background: var(--hired-bg); color: var(--hired); }
 .cc-tag.warn { background: var(--hr-round-bg); color: var(--hr-round); }
+/* ---------- job from a job description ---------- */
+.callout-inline { background: var(--blue-soft); border-left: 3px solid var(--blue); padding: 10px 12px; font-size: 13.5px; }
+.callout-inline.warn { background: #fff8ec; border-left-color: #e59a1a; }
+.more-toggle { align-self: flex-start; font-size: 13.5px; }
+.more-details { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--line); background: var(--subtle); padding: 14px; }
+.job-details { display: flex; flex-direction: column; gap: 12px; }

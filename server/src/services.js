@@ -5,6 +5,7 @@ import { normalizeSkills } from './skills.js';
 import { scoreMatch } from './matching.js';
 import { workspaceId, currentUser } from './context.js';
 import { listCalls } from './calls.js';
+import { cleanJobDetails } from './jobDescription.js';
 
 const parseProfile = (json) => {
   if (!json) return null;
@@ -260,7 +261,7 @@ export function validateRounds(input) {
   return rounds;
 }
 
-export function createJob({ company_id, title, required_skills, description, status = 'open', rounds } = {}, at = now()) {
+export function createJob({ company_id, title, required_skills, description, status = 'open', rounds, details, jd_text } = {}, at = now()) {
   const t = String(title ?? '').trim();
   if (!t) throw new HttpError(400, 'title is required');
   const ws = workspaceId();
@@ -270,10 +271,11 @@ export function createJob({ company_id, title, required_skills, description, sta
   if (!['open', 'closed'].includes(status)) throw new HttpError(400, 'status must be open or closed');
 
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, rounds, apply_token, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, rounds, apply_token, details, jd_text, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(ws, Number(company_id), t, JSON.stringify(normalizeSkills(required_skills)), description ?? null, status,
-    JSON.stringify(validateRounds(rounds)), newApplyToken(), at);
+    JSON.stringify(validateRounds(rounds)), newApplyToken(), JSON.stringify(cleanJobDetails(details)),
+    jd_text ? String(jd_text).trim().slice(0, 30_000) || null : null, at);
   return getJob(Number(lastInsertRowid));
 }
 
