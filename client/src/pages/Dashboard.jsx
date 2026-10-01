@@ -2,7 +2,9 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks.js'
 import { STAGES, stageSlug, timeAgo } from '../utils.js'
-import { PageHeader, PageState } from '../components/ui.jsx'
+import { PageState } from '../components/ui.jsx'
+import { CountUp, LineReveal, RiseWords } from '../components/TextFx.jsx'
+import { firstName, useAuth } from '../auth.jsx'
 
 const EVENT_ICONS = {
   created: '+',
@@ -11,26 +13,37 @@ const EVENT_ICONS = {
   stage: '→',
   note: '✎',
   application: '⇢',
+  applied: '⇢',
 }
 
-function StatCard({ label, value, hint, to }) {
+function greeting() {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+
+function StatCard({ label, value, hint, to, i = 0 }) {
   const body = (
     <>
       <span className="stat-label">{label}</span>
-      <span className="stat-value">{value ?? 0}</span>
+      <span className="stat-value">
+        <CountUp value={value ?? 0} />
+      </span>
       {hint && <span className="muted small">{hint}</span>}
     </>
   )
   return to ? (
-    <Link to={to} className="card stat-card link-card">
+    <Link to={to} className="card stat-card link-card rise" style={{ '--i': i }}>
       {body}
     </Link>
   ) : (
-    <div className="card stat-card">{body}</div>
+    <div className="card stat-card rise" style={{ '--i': i }}>
+      {body}
+    </div>
   )
 }
 
 export default function Dashboard() {
+  const { user } = useAuth()
   const { data, error, loading, reload } = useApi(() => api.stats(), [])
   if (!data) return <PageState loading={loading} error={error} onRetry={reload} />
 
@@ -43,17 +56,32 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader title="Dashboard" subtitle="Talent pool and hiring pipeline at a glance" />
+      <header className="greet">
+        <p className="kicker dark">{user?.workspace?.name}</p>
+        <LineReveal
+          label={`${greeting()}, ${firstName(user)}.`}
+          lines={[<>{greeting()}, <span className="grad-text">{firstName(user)}.</span></>]}
+        />
+        <RiseWords
+          className="muted greet-sub"
+          delay={350}
+          text={
+            totals.candidates
+              ? `You have ${totals.candidates} candidates in your pool and ${totals.active_applications} applications in progress.`
+              : 'Your workspace is empty. Upload a first resume or press Guide me to see how it works.'
+          }
+        />
+      </header>
 
-      <div className="stat-grid">
-        <StatCard label="Candidates" value={totals.candidates} hint="in the talent pool" to="/candidates" />
-        <StatCard label="Returning" value={totals.returning} hint="applied more than once" />
-        <StatCard label="Open jobs" value={totals.open_jobs} hint="across client companies" to="/jobs" />
-        <StatCard label="Active applications" value={totals.active_applications} hint={`${totals.hired ?? 0} hired so far`} />
+      <div className="stat-grid" data-tour="stats">
+        <StatCard i={0} label="Candidates" value={totals.candidates} hint="in your talent pool" to="/candidates" />
+        <StatCard i={1} label="Returning" value={totals.returning} hint="applied more than once" />
+        <StatCard i={2} label="Open jobs" value={totals.open_jobs} hint="across client companies" to="/jobs" />
+        <StatCard i={3} label="In progress" value={totals.active_applications} hint={`${totals.hired ?? 0} hired so far`} />
       </div>
 
       <div className="dash-grid">
-        <section className="card">
+        <section className="card rise" style={{ '--i': 4 }} data-tour="funnel">
           <h2 className="card-title">Pipeline funnel</h2>
           <div className="bars">
             {stages.map((stage) => (
@@ -71,8 +99,8 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section className="card">
-          <h2 className="card-title">Top skills in the pool</h2>
+        <section className="card rise" style={{ '--i': 5 }}>
+          <h2 className="card-title">Top skills in your pool</h2>
           {top_skills.length ? (
             <div className="bars">
               {top_skills.slice(0, 8).map((s) => (
@@ -92,7 +120,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        <section className="card">
+        <section className="card rise" style={{ '--i': 6 }}>
           <h2 className="card-title">Roles</h2>
           {roles.length ? (
             <div className="bars">
@@ -113,7 +141,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        <section className="card">
+        <section className="card rise" style={{ '--i': 7 }} data-tour="activity">
           <h2 className="card-title">Recent activity</h2>
           {recent_events.length ? (
             <ul className="feed">
@@ -129,7 +157,10 @@ export default function Dashboard() {
                       </Link>{' '}
                       <span className="muted">{e.message}</span>
                     </p>
-                    <span className="muted small">{timeAgo(e.created_at)}</span>
+                    <span className="muted small">
+                      {timeAgo(e.created_at)}
+                      {e.actor && ` · by ${e.actor === user?.name ? 'you' : e.actor}`}
+                    </span>
                   </div>
                 </li>
               ))}

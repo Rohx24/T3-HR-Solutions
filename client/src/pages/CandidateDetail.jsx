@@ -5,6 +5,7 @@ import { useApi } from '../hooks.js'
 import { formatDate, formatYears, initials, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
 import NoteForm from '../components/NoteForm.jsx'
+import { useAuth } from '../auth.jsx'
 import {
   MatchScore,
   PageHeader,
@@ -18,6 +19,7 @@ import {
 
 export default function CandidateDetail() {
   const { id } = useParams()
+  const { user } = useAuth()
   const toast = useToast()
   const candidate = useApi(() => api.candidate(id), [id])
   const jobs = useApi(() => api.jobs(), [])
@@ -105,7 +107,7 @@ export default function CandidateDetail() {
             </div>
           </section>
 
-          <section className="card">
+          <section className="card" data-tour="applications">
             <h2 className="card-title">Applications</h2>
             {applications.length ? (
               <ul className="app-list">
@@ -158,7 +160,7 @@ export default function CandidateDetail() {
         </div>
 
         <div className="stack">
-          <section className="card">
+          <section className="card" data-tour="note-form">
             <h2 className="card-title">Add round comment</h2>
             <NoteForm candidateId={c.id} applications={applications} onSaved={() => candidate.reload()} />
           </section>
@@ -184,7 +186,10 @@ export default function CandidateDetail() {
                   ) : (
                     <li key={item.key} className="tl-item tl-event">
                       <p>{item.message}</p>
-                      <span className="muted small">{timeAgo(item.created_at)}</span>
+                      <span className="muted small">
+                        {timeAgo(item.created_at)}
+                        {item.actor && ` · by ${item.actor === user?.name ? 'you' : item.actor}`}
+                      </span>
                     </li>
                   ),
                 )}

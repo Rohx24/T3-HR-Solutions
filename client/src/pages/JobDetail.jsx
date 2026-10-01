@@ -76,7 +76,7 @@ export default function JobDetail() {
       </section>
 
       <div className="pipeline-layout">
-        <div className="kanban" aria-label="Pipeline">
+        <div className="kanban" aria-label="Pipeline" data-tour="kanban">
           {STAGES.map((stage) => (
             <div
               key={stage}
@@ -128,7 +128,7 @@ export default function JobDetail() {
           ))}
         </div>
 
-        <aside className="card suggestions">
+        <aside className="card suggestions" data-tour="suggestions">
           <h2 className="card-title">Suggested from talent pool</h2>
           <p className="muted small">Ranked by overlap with this job's required skills.</p>
           {!matches.data ? (

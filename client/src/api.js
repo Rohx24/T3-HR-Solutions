@@ -2,10 +2,16 @@
 // Vite dev proxy and when Express serves client/dist in production.
 
 async function request(path, options = {}) {
-  const res = await fetch(`/api${path}`, options)
+  const res = await fetch(`/api${path}`, { credentials: 'same-origin', ...options })
   const isJson = res.headers.get('content-type')?.includes('application/json')
   const body = isJson ? await res.json() : null
-  if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`)
+  if (!res.ok) {
+    // Session expired or signed out in another tab: let the auth layer send the user to sign-in.
+    if (res.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('hr:unauthorized'))
+    const err = new Error(body?.error || `Request failed (${res.status})`)
+    err.status = res.status
+    throw err
+  }
   return body
 }
 
@@ -24,6 +30,13 @@ function query(params = {}) {
 
 export const api = {
   health: () => request('/health'),
+
+  authConfig: () => request('/auth/config'),
+  me: () => request('/auth/me'),
+  login: (email, password) => request('/auth/login', json('POST', { email, password })),
+  signup: (data) => request('/auth/signup', json('POST', data)),
+  google: (credential) => request('/auth/google', json('POST', { credential })),
+  logout: () => request('/auth/logout', { method: 'POST' }),
   meta: () => request('/meta'),
   stats: () => request('/stats'),
 

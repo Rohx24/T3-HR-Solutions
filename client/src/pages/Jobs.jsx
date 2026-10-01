@@ -18,7 +18,7 @@ export default function Jobs() {
         title="Jobs"
         subtitle="Open roles across client companies"
         actions={
-          <button className="btn btn-primary" onClick={() => setFormOpen(true)}>
+          <button className="btn btn-primary" onClick={() => setFormOpen(true)} data-tour="new-job">
             + New job
           </button>
         }

@@ -3,32 +3,17 @@ import { api } from '../api.js'
 import { STAGES } from '../utils.js'
 import { useToast } from './Toast.jsx'
 import { StarInput } from './ui.jsx'
-
-const AUTHOR_KEY = 'hr-int.author'
-
-function readAuthor() {
-  try {
-    return localStorage.getItem(AUTHOR_KEY) || ''
-  } catch {
-    return ''
-  }
-}
-
-function saveAuthor(name) {
-  try {
-    localStorage.setItem(AUTHOR_KEY, name)
-  } catch {
-    // storage unavailable, nothing to remember
-  }
-}
+import { useAuth } from '../auth.jsx'
 
 export default function NoteForm({ candidateId, applications, onSaved }) {
   const toast = useToast()
+  const { user } = useAuth()
   const first = applications[0]
   const [appId, setAppId] = useState(first ? String(first.id) : '')
   const [round, setRound] = useState(first && first.stage !== 'Applied' ? first.stage : 'Screening')
   const [rating, setRating] = useState(0)
-  const [author, setAuthor] = useState(readAuthor)
+  // Defaults to the signed-in user; editable when noting feedback on behalf of a panel member.
+  const [author, setAuthor] = useState(user?.name || '')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -54,11 +39,10 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
       await api.addNote(candidateId, {
         application_id: appId ? Number(appId) : null,
         round,
-        author: author.trim() || 'Recruiter',
+        author: author.trim() || user?.name || 'Recruiter',
         rating,
         body: body.trim(),
       })
-      saveAuthor(author.trim())
       toast.success('Comment added', { message: `${round} · ${rating}/5` })
       setBody('')
       setRating(0)

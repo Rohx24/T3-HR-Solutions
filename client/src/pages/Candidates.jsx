@@ -32,20 +32,20 @@ export default function Candidates() {
     <>
       <PageHeader
         title="Candidates"
-        subtitle="Every parsed resume lives in one searchable talent pool"
+        subtitle="Every resume you upload lives in one searchable talent pool"
         actions={
           <>
             <a className="btn" href={api.exportUrl({ q: dq, role, skill })} download>
               Export CSV
             </a>
-            <button className="btn btn-primary" onClick={() => setUploadOpen(true)}>
+            <button className="btn btn-primary" onClick={() => setUploadOpen(true)} data-tour="upload">
               + Upload resume
             </button>
           </>
         }
       />
 
-      <div className="card toolbar">
+      <div className="card toolbar" data-tour="filters">
         <input
           className="search"
           type="search"
@@ -92,7 +92,7 @@ export default function Candidates() {
           )}
         </div>
       ) : (
-        <div className="card table-card">
+        <div className="card table-card" data-tour="pool">
           <div className="table-meta">
             <span className="muted small">
               {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
