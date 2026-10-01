@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { useToast } from './Toast.jsx'
 import { Modal } from './ui.jsx'
-import { formatBytes } from '../utils.js'
+import ChoiceCards, { CALL_ICONS } from './ChoiceCards.jsx'
+import { formatBytes, intlNumber } from '../utils.js'
 
 // Add details from a phone call with a candidate, three ways:
 //   1. Record now: the call is on speaker and this device's microphone records it live
@@ -30,7 +31,7 @@ const AUDIO_EXTS = ['.amr', '.3gp', '.m4a', '.mp3', '.wav', '.ogg', '.opus', '.w
 const MAX_AUDIO_BYTES = 80 * 1024 * 1024
 
 // Drop zone for a call recording, matching the resume upload. Shows the file with a player once chosen.
-function AudioPicker({ file, onPick, onError }) {
+function AudioPicker({ file, onPick, onError, channel, onUseRecorder }) {
   const inputRef = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [url, setUrl] = useState('')
@@ -62,6 +63,19 @@ function AudioPicker({ file, onPick, onError }) {
   return (
     <div className="field">
       <span>Call recording</span>
+      {channel === 'whatsapp' ? (
+        <div className="channel-note warn">
+          <p>
+            <strong>Phones can't record WhatsApp calls.</strong> Their call recorder only saves normal calls, so record WhatsApp calls
+            here while you talk.
+          </p>
+          <button type="button" className="btn btn-small" onClick={onUseRecorder}>
+            Record the call now instead
+          </button>
+        </div>
+      ) : (
+        <p className="muted small">Use the recording your phone saved after the call (most Android phones keep it in the Phone app).</p>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -134,7 +148,7 @@ function AudioPicker({ file, onPick, onError }) {
   )
 }
 
-function Recorder({ onReady, onRecordingChange }) {
+function Recorder({ onReady, onRecordingChange, channel }) {
   const [state, setState] = useState('idle') // idle | recording | paused | done
   const [seconds, setSeconds] = useState(0)
   const [level, setLevel] = useState(0)
@@ -218,7 +232,16 @@ function Recorder({ onReady, onRecordingChange }) {
       {state === 'idle' && (
         <>
           <ol className="steps-list">
-            <li>Call the candidate from your phone (a normal call or a WhatsApp call) and switch on the <strong>speaker</strong>.</li>
+            {channel === 'whatsapp' ? (
+              <li>
+                Start a <strong>WhatsApp voice call</strong> from your phone (use <strong>Open WhatsApp chat</strong> above) and switch on
+                the <strong>speaker</strong>.
+              </li>
+            ) : (
+              <li>
+                <strong>Call their mobile</strong> from your phone and switch on the <strong>speaker</strong>.
+              </li>
+            )}
             <li>Keep the phone close to this computer or tablet.</li>
             <li>Tell the candidate the call is being recorded.</li>
             <li>Press <strong>Start recording</strong>. Press <strong>Stop</strong> when the call ends.</li>
@@ -334,35 +357,45 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
   }
 
   const apps = candidate?.applications || []
+  const number = intlNumber(candidate?.phone)
 
   return (
     <Modal open={open} title={`Add call details: ${candidate?.name || ''}`} onClose={close} wide>
       <form className="form" onSubmit={save}>
-        <div className="field">
-          <span>How did you call?</span>
-          <div className="seg" role="radiogroup" aria-label="How did you call?">
-            {[
-              ['phone', 'Phone call'],
-              ['whatsapp', 'WhatsApp call'],
-            ].map(([value, label]) => (
-              <button
-                type="button"
-                key={value}
-                role="radio"
-                aria-checked={channel === value}
-                className={`seg-btn ${channel === value ? 'on chosen' : ''}`}
-                onClick={() => setChannel(value)}
-              >
-                {label}
-              </button>
-            ))}
+        <ChoiceCards
+          name="call-channel"
+          label="How did you call?"
+          value={channel}
+          onChange={setChannel}
+          options={[
+            { value: 'phone', title: 'Phone call', text: 'Normal call to their mobile', icon: CALL_ICONS.phone },
+            { value: 'whatsapp', title: 'WhatsApp call', text: 'Voice call in WhatsApp', icon: CALL_ICONS.whatsapp },
+          ]}
+          hint={
+            candidate?.contact?.preference &&
+            `They asked for a ${candidate.contact.preference === 'whatsapp' ? 'WhatsApp call' : 'normal phone call'} when they applied.`
+          }
+        />
+        {number && (
+          <div className="call-start">
+            {channel === 'whatsapp' ? (
+              <a className="btn" href={`https://wa.me/${number}`} target="_blank" rel="noreferrer">
+                <span className="call-start-icon" aria-hidden="true">{CALL_ICONS.whatsapp}</span>
+                Open WhatsApp chat
+              </a>
+            ) : (
+              <a className="btn" href={`tel:+${number}`}>
+                <span className="call-start-icon" aria-hidden="true">{CALL_ICONS.phone}</span>
+                Call {candidate.phone}
+              </a>
+            )}
+            <span className="muted small">
+              {channel === 'whatsapp'
+                ? 'Opens their chat in WhatsApp. Tap the call icon there to start a voice call.'
+                : 'On a phone this starts the call. On a computer, dial the number from your mobile.'}
+            </span>
           </div>
-          {candidate?.contact?.preference && (
-            <p className="muted small">
-              They asked for a {candidate.contact.preference === 'whatsapp' ? 'WhatsApp call' : 'normal phone call'} when they applied.
-            </p>
-          )}
-        </div>
+        )}
         <div className="tabs" role="tablist">
           {TABS.map(([key, label]) => (
             <button
@@ -379,9 +412,11 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
           ))}
         </div>
 
-        {tab === 'record' && <Recorder key={recorderKey} onReady={setAudio} onRecordingChange={setRecording} />}
+        {tab === 'record' && <Recorder key={recorderKey} channel={channel} onReady={setAudio} onRecordingChange={setRecording} />}
 
-        {tab === 'upload' && <AudioPicker file={audio} onPick={setAudio} onError={setError} />}
+        {tab === 'upload' && (
+          <AudioPicker file={audio} onPick={setAudio} onError={setError} channel={channel} onUseRecorder={() => switchTab('record')} />
+        )}
 
         <label className="field">
           <span>{tab === 'type' ? 'What did you learn on the call?' : 'Anything to add? (optional)'}</span>

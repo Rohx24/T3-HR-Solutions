@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import Logo from '../components/Logo.jsx'
+import ChoiceCards, { CALL_ICONS } from '../components/ChoiceCards.jsx'
 import { formatBytes } from '../utils.js'
 import '../apply.css'
 
@@ -19,27 +20,8 @@ async function call(path, options) {
 }
 
 const CALL_OPTIONS = [
-  {
-    value: 'whatsapp',
-    title: 'WhatsApp call',
-    text: 'We ask for your OK in WhatsApp first.',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20l1.2-4.2A8.5 8.5 0 1 1 20 11.5Z" />
-        <path d="M9 8.5c0 3.5 2.6 6.5 6 6.8l1.2-1.4-2-1.2-.9.8c-1.2-.5-2.1-1.4-2.6-2.6l.8-.9-1.2-2L9 8.5Z" />
-      </svg>
-    ),
-  },
-  {
-    value: 'phone',
-    title: 'Normal phone call',
-    text: 'A regular call to your mobile.',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />
-      </svg>
-    ),
-  },
+  { value: 'whatsapp', title: 'WhatsApp call', text: 'We ask for your OK in WhatsApp first.', icon: CALL_ICONS.whatsapp },
+  { value: 'phone', title: 'Normal phone call', text: 'A regular call to your mobile.', icon: CALL_ICONS.phone },
 ]
 
 export default function ApplyPage() {
@@ -244,29 +226,13 @@ export default function ApplyPage() {
                   </label>
                 </div>
 
-                <fieldset className="field apply-choice">
-                  <legend>How should our recruiter call you?</legend>
-                  <div className="choice-grid">
-                    {CALL_OPTIONS.map((o) => (
-                      <label key={o.value} className={`choice ${form.contact_preference === o.value ? 'on' : ''}`}>
-                        <input
-                          type="radio"
-                          name="contact_preference"
-                          value={o.value}
-                          checked={form.contact_preference === o.value}
-                          onChange={set('contact_preference')}
-                        />
-                        <span className="choice-icon" aria-hidden="true">
-                          {o.icon}
-                        </span>
-                        <span className="choice-text">
-                          <strong>{o.title}</strong>
-                          <small>{o.text}</small>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
+                <ChoiceCards
+                  name="contact_preference"
+                  label="How should our recruiter call you?"
+                  options={CALL_OPTIONS}
+                  value={form.contact_preference}
+                  onChange={(v) => setForm({ ...form, contact_preference: v })}
+                />
 
                 <label className="consent">
                   <input type="checkbox" checked={form.consent} onChange={set('consent')} />

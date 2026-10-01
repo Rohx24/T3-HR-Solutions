@@ -651,3 +651,28 @@ input::placeholder, textarea::placeholder { color: #9aa2b1; }
 }
 @media (min-width: 2200px) { :root { --zoom: 1.25; } }
 @media (min-width: 2800px) { :root { --zoom: 1.5; } }
+
+/* ---------- option cards (ChoiceCards): pick one, square corners ---------- */
+.choice-field { border: 0; padding: 0; margin: 0; min-width: 0; }
+.choice-field legend { font-size: 13px; font-weight: 700; color: var(--text-2); padding: 0; margin-bottom: 7px; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.choice {
+  position: relative; display: flex; gap: 12px; align-items: center; padding: 12px 14px;
+  border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.25s var(--e-std), transform 0.15s var(--e-std);
+}
+.choice:hover { border-color: #9fb3c8; box-shadow: var(--shadow-sm); }
+.choice:active { transform: scale(0.99); }
+.choice input { position: absolute; opacity: 0; pointer-events: none; }
+.choice:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+.choice.on { border-color: var(--blue); background: #f4f9ff; box-shadow: inset 0 0 0 1px var(--blue), 0 8px 18px -12px rgba(12, 134, 233, 0.6); }
+.choice-icon { width: 38px; height: 38px; display: grid; place-items: center; flex-shrink: 0; background: var(--subtle); color: var(--text-2); border: 1px solid var(--line); transition: background 0.25s, color 0.25s, border-color 0.25s; }
+.choice-icon svg { width: 18px; height: 18px; }
+.choice:hover .choice-icon { color: var(--blue); }
+.choice.on .choice-icon { background: var(--grad); color: #fff; border-color: transparent; }
+.choice-text { display: flex; flex-direction: column; gap: 2px; line-height: 1.3; min-width: 0; padding-right: 10px; }
+.choice-text strong { font-size: 14px; }
+.choice-text small { color: var(--muted); font-size: 12px; }
+.choice-tick { position: absolute; top: -1px; right: -1px; width: 20px; height: 20px; display: grid; place-items: center; background: var(--blue); color: #fff; transform: scale(0); transform-origin: top right; transition: transform 0.25s var(--e-out); }
+.choice-tick svg { width: 12px; height: 12px; }
+.choice.on .choice-tick { transform: scale(1); }

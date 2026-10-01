@@ -103,7 +103,6 @@
 .public-card h1 { font-size: 26px; letter-spacing: -0.02em; }
 
 /* ---------- call preference (from the apply page) + one-tap call buttons ---------- */
-.seg-btn.on.chosen { background: var(--blue); color: #fff; }
 .contact-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 16px; background: var(--subtle); border-left: 3px solid var(--line-strong); }
 .contact-bar.pref-whatsapp, .contact-bar.pref-phone { border-left-color: var(--blue); background: #f6faff; }
 .contact-pref { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
@@ -117,3 +116,12 @@
 .share-row input { flex: 1 1 280px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; background: var(--subtle); }
 .share-sources { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .share-sources .muted { margin-right: 4px; }
+
+/* ---------- call dialog: follows the chosen channel ---------- */
+.call-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.call-start .btn { gap: 8px; }
+.call-start-icon { display: inline-grid; width: 16px; height: 16px; }
+.call-start-icon svg { width: 16px; height: 16px; }
+.channel-note { display: flex; justify-content: space-between; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 10px 12px; font-size: 13px; animation: fade 0.25s ease; }
+.channel-note.warn { background: var(--hr-round-bg); border-left: 3px solid #e59a1a; color: #6b4300; }
+.channel-note p { flex: 1 1 260px; }
