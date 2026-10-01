@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { db, toJob, toCandidate, parseList, HttpError } from '../db.js';
-import { STAGES, normalizeSkills } from '../skills.js';
+import { normalizeSkills } from '../skills.js';
 import { scoreMatch } from '../matching.js';
-import { createJob, getJob } from '../services.js';
+import { createJob, getJob, listInterviews, updateRounds } from '../services.js';
 import { idParam } from './util.js';
 import { workspaceId } from '../context.js';
 
@@ -10,7 +10,7 @@ const router = Router();
 
 function withCounts(job) {
   const rows = db.prepare('SELECT stage, COUNT(*) AS n FROM applications WHERE job_id = ? GROUP BY stage').all(job.id);
-  const stage_counts = Object.fromEntries(STAGES.map((s) => [s, 0]));
+  const stage_counts = Object.fromEntries(job.stages.map((s) => [s, 0]));
   for (const r of rows) stage_counts[r.stage] = r.n;
   return { ...job, total: rows.reduce((sum, r) => sum + r.n, 0), stage_counts };
 }
@@ -56,12 +56,19 @@ router.get('/:id', (req, res) => {
       times_applied: r.times_applied,
     },
   }));
-  res.json({ ...withCounts(job), applications });
+  // Each card shows its interviews (next scheduled / finished) on the board.
+  const byApp = new Map();
+  for (const iv of listInterviews({ jobId: job.id, limit: 200 })) {
+    if (!byApp.has(iv.application_id)) byApp.set(iv.application_id, []);
+    byApp.get(iv.application_id).push(iv);
+  }
+  res.json({ ...withCounts(job), applications: applications.map((a) => ({ ...a, interviews: byApp.get(a.id) ?? [] })) });
 });
 
 router.patch('/:id', (req, res) => {
   const job = requireJob(req);
-  const { title, description, status, required_skills } = req.body ?? {};
+  const { title, description, status, required_skills, rounds } = req.body ?? {};
+  if (rounds !== undefined) updateRounds(job, rounds);
   if (status !== undefined && !['open', 'closed'].includes(status)) throw new HttpError(400, 'status must be open or closed');
   db.prepare('UPDATE jobs SET title = ?, description = ?, status = ?, required_skills = ? WHERE id = ?').run(
     title?.trim() || job.title,

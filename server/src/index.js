@@ -12,6 +12,7 @@ import applications from './routes/applications.js';
 import stats from './routes/stats.js';
 import auth from './routes/auth.js';
 import workspace from './routes/workspace.js';
+import interviews from './routes/interviews.js';
 import { requireAuth } from './auth.js';
 import { connectRedis, disconnectRedis, redisStatus } from './redis.js';
 import { apiCache } from './cache.js';
@@ -71,6 +72,7 @@ app.use('/api/jobs', jobs);
 app.use('/api/companies', companies);
 app.use('/api/applications', applications);
 app.use('/api/workspace', workspace);
+app.use('/api/interviews', interviews);
 app.use('/api', (req, res) => res.status(404).json({ error: `No route for ${req.method} ${req.originalUrl}` }));
 
 // Production: serve the built React app from the same origin.

@@ -1,6 +1,6 @@
 // Write-side business logic shared by the API routes and the seed script.
-import { db, tx, now, parseList, toCandidate, toJob, HttpError } from './db.js';
-import { STAGES, normalizeSkills } from './skills.js';
+import { db, tx, now, parseList, toCandidate, toJob, HttpError, DEFAULT_ROUNDS, FIXED_STAGES, roundsOf, stagesFor } from './db.js';
+import { normalizeSkills } from './skills.js';
 import { scoreMatch } from './matching.js';
 import { workspaceId, currentUser } from './context.js';
 
@@ -41,13 +41,16 @@ export function getCandidateDetail(id) {
   if (!row) return null;
 
   const applications = db.prepare(`
-    SELECT a.id, a.job_id, j.title AS job_title, c.name AS company_name, a.stage, a.match_score, a.created_at
+    SELECT a.id, a.job_id, j.title AS job_title, c.name AS company_name, a.stage, a.match_score, a.created_at, j.rounds AS job_rounds
     FROM applications a
     JOIN jobs j ON j.id = a.job_id
     JOIN companies c ON c.id = j.company_id
     WHERE a.candidate_id = ?
     ORDER BY a.created_at DESC
-  `).all(id);
+  `).all(id).map(({ job_rounds, ...a }) => {
+    const rounds = roundsOf(job_rounds);
+    return { ...a, rounds, stages: stagesFor(rounds) };
+  });
 
   const notes = db.prepare(`
     SELECT n.id, n.application_id, j.title AS job_title, n.round, n.author, n.rating, n.body, n.created_at
@@ -70,6 +73,7 @@ export function getCandidateDetail(id) {
     profile: parseProfile(row.profile),
     parsed_by: row.parsed_by ?? 'rules',
     applications,
+    interviews: listInterviews({ candidateId: id, limit: 100 }),
     notes,
     events,
   };
@@ -156,10 +160,11 @@ export function addApplication(candidateId, jobId, at = now()) {
 }
 
 export function moveStage(applicationId, stage, at = now()) {
-  if (!STAGES.includes(stage)) throw new HttpError(400, `stage must be one of: ${STAGES.join(', ')}`);
   return tx(() => {
     const app = getApplication(applicationId);
     if (!app) throw new HttpError(404, 'Application not found');
+    const stages = getJob(app.job_id).stages;
+    if (!stages.includes(stage)) throw new HttpError(400, `stage must be one of: ${stages.join(', ')}`);
     if (app.stage === stage) return app;
 
     const job = getJob(app.job_id);
@@ -215,7 +220,30 @@ export function createCompany({ name, industry } = {}, at = now()) {
   return { id: Number(lastInsertRowid), name: n, industry: industry ?? null, job_count: 0 };
 }
 
-export function createJob({ company_id, title, required_skills, description, status = 'open' } = {}, at = now()) {
+// Cleans a job's list of interview rounds: 1 to 10 unique names, none clashing with the fixed stages.
+export function validateRounds(input) {
+  if (input === undefined || input === null) return DEFAULT_ROUNDS;
+  if (!Array.isArray(input)) throw new HttpError(400, 'rounds must be a list of round names');
+  const seen = new Set();
+  const rounds = [];
+  for (const raw of input) {
+    const name = String(raw ?? '').trim().replace(/\s+/g, ' ');
+    if (!name) continue;
+    if (name.length > 40) throw new HttpError(400, `Round name is too long: "${name.slice(0, 40)}..."`);
+    const key = name.toLowerCase();
+    if (FIXED_STAGES.some((s) => s.toLowerCase() === key)) {
+      throw new HttpError(400, `"${name}" is added automatically. Choose a different round name.`);
+    }
+    if (seen.has(key)) throw new HttpError(400, `The round "${name}" is listed twice`);
+    seen.add(key);
+    rounds.push(name);
+  }
+  if (!rounds.length) throw new HttpError(400, 'A job needs at least one interview round');
+  if (rounds.length > 10) throw new HttpError(400, 'A job can have at most 10 interview rounds');
+  return rounds;
+}
+
+export function createJob({ company_id, title, required_skills, description, status = 'open', rounds } = {}, at = now()) {
   const t = String(title ?? '').trim();
   if (!t) throw new HttpError(400, 'title is required');
   const ws = workspaceId();
@@ -225,8 +253,10 @@ export function createJob({ company_id, title, required_skills, description, sta
   if (!['open', 'closed'].includes(status)) throw new HttpError(400, 'status must be open or closed');
 
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(ws, Number(company_id), t, JSON.stringify(normalizeSkills(required_skills)), description ?? null, status, at);
+    INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, rounds, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(ws, Number(company_id), t, JSON.stringify(normalizeSkills(required_skills)), description ?? null, status,
+    JSON.stringify(validateRounds(rounds)), at);
   return getJob(Number(lastInsertRowid));
 }
 
@@ -243,3 +273,103 @@ export function clearWorkspace() {
     return { candidates, jobs, companies, files };
   });
 }
+
+// Changing a job's rounds must not strand anyone: a round that still has candidates can't be removed.
+export function updateRounds(job, roundsInput) {
+  const rounds = validateRounds(roundsInput);
+  const removed = job.rounds.filter((r) => !rounds.includes(r));
+  for (const r of removed) {
+    const n = db.prepare('SELECT COUNT(*) AS n FROM applications WHERE job_id = ? AND stage = ?').get(job.id, r).n;
+    if (n) throw new HttpError(409, `${n} ${n === 1 ? 'person is' : 'people are'} still in "${r}". Move them to another round first.`);
+  }
+  db.prepare('UPDATE jobs SET rounds = ? WHERE id = ?').run(JSON.stringify(rounds), job.id);
+  return rounds;
+}
+
+// ---------- interviews ----------
+
+const INTERVIEW_SELECT = `
+  SELECT i.id, i.application_id, i.round, i.scheduled_at, i.duration_minutes, i.interviewer, i.location, i.status,
+         i.completed_at, i.created_at, a.candidate_id, c.name AS candidate_name, a.job_id, j.title AS job_title,
+         co.name AS company_name
+  FROM interviews i
+  JOIN applications a ON a.id = i.application_id
+  JOIN candidates c ON c.id = a.candidate_id
+  JOIN jobs j ON j.id = a.job_id
+  JOIN companies co ON co.id = j.company_id
+`;
+
+export function getInterview(id) {
+  return db.prepare(`${INTERVIEW_SELECT} WHERE i.id = ? AND c.workspace_id = ?`).get(id, workspaceId()) ?? null;
+}
+
+export function listInterviews({ candidateId, jobId, upcoming, limit = 50 } = {}) {
+  const where = ['c.workspace_id = ?'];
+  const args = [workspaceId()];
+  if (candidateId) (where.push('a.candidate_id = ?'), args.push(candidateId));
+  if (jobId) (where.push('a.job_id = ?'), args.push(jobId));
+  if (upcoming) (where.push("i.status = 'scheduled' AND i.scheduled_at >= ?"), args.push(new Date(Date.now() - 6 * 3600_000).toISOString()));
+  const order = upcoming ? 'i.scheduled_at ASC' : 'i.scheduled_at DESC';
+  return db.prepare(`${INTERVIEW_SELECT} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`).all(...args, Math.min(limit, 200));
+}
+
+function parseWhen(value, field) {
+  const d = new Date(value);
+  if (!value || Number.isNaN(d.getTime())) throw new HttpError(400, `${field} must be a valid date and time`);
+  return d.toISOString();
+}
+
+const cleanText = (v, max = 200) => (v === undefined || v === null ? null : String(v).trim().slice(0, max) || null);
+
+// Scheduling an interview for a later round also moves the candidate into that round.
+export function scheduleInterview({ application_id, round, scheduled_at, duration_minutes, interviewer, location } = {}, at = now()) {
+  return tx(() => {
+    const app = getApplication(Number(application_id));
+    if (!app) throw new HttpError(404, 'Application not found');
+    const job = getJob(app.job_id);
+    if (!job.rounds.includes(round)) throw new HttpError(400, `Choose one of this job's rounds: ${job.rounds.join(', ')}`);
+    const when = parseWhen(scheduled_at, 'scheduled_at');
+    const minutes = duration_minutes ? Math.round(Number(duration_minutes)) : null;
+    if (minutes !== null && !(minutes > 0 && minutes <= 600)) throw new HttpError(400, 'duration_minutes must be between 1 and 600');
+
+    const { lastInsertRowid } = db.prepare(`
+      INSERT INTO interviews (application_id, round, scheduled_at, duration_minutes, interviewer, location, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?)
+    `).run(app.id, round, when, minutes, cleanText(interviewer, 80) ?? currentUser()?.name ?? null, cleanText(location), at, at);
+
+    const stages = job.stages;
+    const closed = ['Hired', 'Rejected'].includes(app.stage);
+    if (!closed && stages.indexOf(round) > stages.indexOf(app.stage)) moveStage(app.id, round, at);
+    addEvent(app.candidate_id, 'interview', `${round} interview scheduled for ${job.title} @ ${job.company_name}`, at);
+    return getInterview(Number(lastInsertRowid));
+  });
+}
+
+// Mark finished / cancelled, reschedule, or edit the details of an interview.
+export function updateInterview(id, { status, scheduled_at, completed_at, duration_minutes, interviewer, location } = {}, at = now()) {
+  return tx(() => {
+    const iv = getInterview(id);
+    if (!iv) throw new HttpError(404, 'Interview not found');
+    const next = { ...iv };
+    if (scheduled_at !== undefined) next.scheduled_at = parseWhen(scheduled_at, 'scheduled_at');
+    if (duration_minutes !== undefined) next.duration_minutes = duration_minutes ? Math.round(Number(duration_minutes)) : null;
+    if (interviewer !== undefined) next.interviewer = cleanText(interviewer, 80);
+    if (location !== undefined) next.location = cleanText(location);
+    if (status !== undefined) {
+      if (!['scheduled', 'completed', 'cancelled'].includes(status)) throw new HttpError(400, 'status must be scheduled, completed or cancelled');
+      next.status = status;
+      next.completed_at = status === 'completed' ? (completed_at ? parseWhen(completed_at, 'completed_at') : at) : null;
+    }
+    db.prepare(`
+      UPDATE interviews SET scheduled_at = ?, duration_minutes = ?, interviewer = ?, location = ?, status = ?, completed_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(next.scheduled_at, next.duration_minutes, next.interviewer, next.location, next.status, next.completed_at, at, id);
+
+    const what = `${iv.round} interview for ${iv.job_title}`;
+    if (status === 'completed' && iv.status !== 'completed') addEvent(iv.candidate_id, 'interview', `${what} finished`, at);
+    else if (status === 'cancelled' && iv.status !== 'cancelled') addEvent(iv.candidate_id, 'interview', `${what} cancelled`, at);
+    else if (scheduled_at !== undefined && next.scheduled_at !== iv.scheduled_at) addEvent(iv.candidate_id, 'interview', `${what} rescheduled`, at);
+    return getInterview(id);
+  });
+}
+

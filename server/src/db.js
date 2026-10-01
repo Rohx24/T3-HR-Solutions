@@ -122,12 +122,30 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id);
   CREATE INDEX IF NOT EXISTS idx_notes_candidate ON notes(candidate_id);
   CREATE INDEX IF NOT EXISTS idx_events_candidate ON events(candidate_id, created_at);
+
+  -- Scheduled interviews for an application's round (date/time, who, where) and whether they happened.
+  CREATE TABLE IF NOT EXISTS interviews (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id   INTEGER NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    round            TEXT NOT NULL,
+    scheduled_at     TEXT NOT NULL,
+    duration_minutes INTEGER,
+    interviewer      TEXT,
+    location         TEXT,
+    status           TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
+    completed_at     TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_interviews_app ON interviews(application_id);
+  CREATE INDEX IF NOT EXISTS idx_interviews_time ON interviews(scheduled_at);
 `);
 
 // Additive migrations: add columns to existing databases without touching any data.
 for (const [table, column, type] of [
   ['candidates', 'profile', 'TEXT'], // full structured profile from the AI parser (JSON)
-  ['candidates', 'parsed_by', 'TEXT'], // "gpt-4.1-mini" or "rules"
+  ['candidates', 'parsed_by', 'TEXT'], // "gpt-4o-mini" or "rules"
+  ['jobs', 'rounds', 'TEXT'], // JSON list of this job's interview rounds
 ]) {
   const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
   if (!has) {
@@ -183,16 +201,31 @@ export const toCandidate = (r) => ({
   last_applied_at: r.last_applied_at,
 });
 
-export const toJob = (r) => ({
-  id: r.id,
-  company_id: r.company_id,
-  company_name: r.company_name,
-  title: r.title,
-  required_skills: parseList(r.required_skills),
-  description: r.description,
-  status: r.status,
-  created_at: r.created_at,
-});
+// Every job has its own interview rounds. The full pipeline is always:
+//   Applied -> <the job's rounds, in order> -> Offer -> Hired   (Rejected possible at any point)
+export const DEFAULT_ROUNDS = ['Screening', 'Technical', 'HR Round'];
+export const FIXED_STAGES = ['Applied', 'Offer', 'Hired', 'Rejected'];
+export const stagesFor = (rounds) => ['Applied', ...rounds, 'Offer', 'Hired', 'Rejected'];
+export const roundsOf = (json) => {
+  const rounds = json ? parseList(json) : [];
+  return Array.isArray(rounds) && rounds.length ? rounds : DEFAULT_ROUNDS;
+};
+
+export const toJob = (r) => {
+  const rounds = roundsOf(r.rounds);
+  return {
+    id: r.id,
+    company_id: r.company_id,
+    company_name: r.company_name,
+    title: r.title,
+    required_skills: parseList(r.required_skills),
+    description: r.description,
+    status: r.status,
+    rounds,
+    stages: stagesFor(rounds),
+    created_at: r.created_at,
+  };
+};
 
 export class HttpError extends Error {
   constructor(status, message) {

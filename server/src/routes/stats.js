@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, parseList } from '../db.js';
 import { STAGES, SKILLS } from '../skills.js';
+import { listInterviews } from '../services.js';
 import { workspaceId } from '../context.js';
 import { AI_MODEL, aiEnabled } from '../aiParser.js';
 
@@ -36,7 +37,14 @@ router.get('/stats', (req, res) => {
       `, ws),
       hired: byStage.Hired ?? 0,
     },
-    funnel: STAGES.map((stage) => ({ stage, count: byStage[stage] ?? 0 })),
+    // Jobs have their own round names, so every interview round is grouped as "Interviewing".
+    funnel: ['Applied', 'Interviewing', 'Offer', 'Hired', 'Rejected'].map((stage) => ({
+      stage,
+      count: stage === 'Interviewing'
+        ? Object.entries(byStage).filter(([s]) => !['Applied', 'Offer', 'Hired', 'Rejected'].includes(s)).reduce((n, [, c]) => n + c, 0)
+        : byStage[stage] ?? 0,
+    })),
+    upcoming_interviews: listInterviews({ upcoming: true, limit: 8 }),
     top_skills: skillCounts().slice(0, 10),
     roles: db.prepare(`
       SELECT primary_role AS role, COUNT(*) AS count FROM candidates WHERE workspace_id = ?

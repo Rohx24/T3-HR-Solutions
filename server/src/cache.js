@@ -20,6 +20,7 @@ const RULES = [
   [/^\/candidates\/\d+$/, TTL],
   [/^\/jobs$/, TTL],
   [/^\/jobs\/\d+$/, TTL],
+  [/^\/interviews$/, TTL],
 ];
 
 export const ttlFor = (path) => RULES.find(([re]) => re.test(path))?.[1] ?? null;
