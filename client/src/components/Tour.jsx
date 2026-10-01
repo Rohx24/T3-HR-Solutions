@@ -61,9 +61,9 @@ export const TOUR_STEPS = [
   },
   {
     route: firstCandidateRoute,
-    target: 'note-form',
-    title: 'Step 2: write feedback after every interview',
-    body: 'After each interview, pick the round, give a 1 to 5 rating and write what you saw. Your name is added automatically and it all appears in the history on the right.',
+    target: 'calls',
+    title: 'Step 2: add what you learned on the call',
+    body: 'After you call a candidate, press "Add call details". Record the call live with the phone on speaker, upload a recording, or type notes. The AI writes it up and fills in salary, notice period and availability.',
   },
   {
     route: '/jobs',
@@ -74,8 +74,8 @@ export const TOUR_STEPS = [
   {
     route: firstJobRoute,
     target: 'kanban',
-    title: 'Move candidates through stages',
-    body: 'Each column is an interview stage. Drag a card to another column, or use the dropdown on the card. Every move is logged on the candidate’s history.',
+    title: 'Rounds, interviews and feedback',
+    body: 'Each column is one of this job’s interview rounds. Press "Rounds & feedback" on a card to schedule a round and record its result, or send the client’s interviewer a feedback link. Drag cards as people move forward.',
   },
   {
     route: firstJobRoute,

@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast.jsx'
 import { MatchScore, Modal, PageHeader, PageState, ReturningBadge, SkillChips, StageSelect } from '../components/ui.jsx'
 import RoundsEditor, { cleanRounds } from '../components/RoundsEditor.jsx'
 import ScheduleDialog, { formatWhen } from '../components/ScheduleDialog.jsx'
+import ApplicationPanel from '../components/ApplicationPanel.jsx'
 import HelpBox, { stageHelp } from '../components/HelpBox.jsx'
 
 export default function JobDetail() {
@@ -19,6 +20,7 @@ export default function JobDetail() {
   const [overStage, setOverStage] = useState(null)
   const [adding, setAdding] = useState(null)
   const [scheduling, setScheduling] = useState(null)
+  const [panelId, setPanelId] = useState(null)
   const [editRounds, setEditRounds] = useState(null)
   const [roundsError, setRoundsError] = useState('')
 
@@ -80,6 +82,7 @@ export default function JobDetail() {
         steps={[
           'Each column is a step in hiring, from left (new) to right (hired). The small text under each name says what the step means.',
           'When someone passes a step, drag their card to the next column, or pick the step from the drop-down on their card.',
+          'Press "Rounds & feedback" on a card to schedule each round and record the result. You can also send the client\'s interviewer a link to fill in feedback themselves.',
           'On the right are people you already have who suit this job. Press "Add to this job" to include them.',
         ]}
       />
@@ -151,14 +154,9 @@ export default function JobDetail() {
                     <NextInterview interviews={a.interviews} />
                     <div className="card-actions">
                       <StageSelect value={a.stage} stages={stages} onChange={(s) => move(a, s)} />
-                      {!['Hired', 'Rejected'].includes(a.stage) && (
-                        <button
-                          className="btn btn-small"
-                          onClick={() => setScheduling({ id: a.id, stage: a.stage, rounds: j.rounds, name: a.candidate.name })}
-                        >
-                          Schedule
-                        </button>
-                      )}
+                      <button className="btn btn-small btn-primary" onClick={() => setPanelId(a.id)}>
+                        Rounds & feedback
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -203,6 +201,18 @@ export default function JobDetail() {
           )}
         </aside>
       </div>
+      <ApplicationPanel
+        app={applications.find((a) => a.id === panelId)}
+        job={j}
+        onClose={() => setPanelId(null)}
+        onChanged={() => job.reload()}
+        onMove={(app, stage) => move(app, stage)}
+        onSchedule={(app, round) => {
+          setPanelId(null)
+          setScheduling({ id: app.id, stage: app.stage, rounds: j.rounds, name: app.candidate.name, round })
+        }}
+      />
+
       <ScheduleDialog
         application={scheduling}
         title={scheduling ? `Schedule an interview with ${scheduling.name}` : ''}

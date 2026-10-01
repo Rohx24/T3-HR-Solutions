@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks.js'
 import { formatYears } from '../utils.js'
+import { SOURCES } from '../sources.js'
 import { useToast } from './Toast.jsx'
 import { Modal, ReturningBadge, SkillChips, StageBadge } from './ui.jsx'
 
@@ -22,6 +23,8 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
   const jobs = useApi(() => (open ? api.jobs() : Promise.resolve(null)), [open])
   const [file, setFile] = useState(null)
   const [jobId, setJobId] = useState(defaultJobId)
+  const [source, setSource] = useState('')
+  const [sourceDetail, setSourceDetail] = useState('')
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -30,6 +33,8 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
   function reset() {
     setFile(null)
     setJobId(defaultJobId)
+    setSource('')
+    setSourceDetail('')
     setError('')
     setResult(null)
     if (inputRef.current) inputRef.current.value = ''
@@ -53,7 +58,7 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
     setBusy(true)
     setError('')
     try {
-      const res = await api.uploadResume(file, jobId)
+      const res = await api.uploadResume(file, jobId, { source, source_detail: sourceDetail })
       setResult(res)
       const c = res.candidate
       if (res.returning) {
@@ -117,8 +122,24 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
             )}
           </div>
 
+          <div className="form-row">
+            <label className="field">
+              <span>Step 2: Where did this candidate come from?</span>
+              <select value={source} onChange={(e) => setSource(e.target.value)}>
+                <option value="">Choose a source…</option>
+                {SOURCES.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Details (optional)</span>
+              <input value={sourceDetail} onChange={(e) => setSourceDetail(e.target.value)} placeholder="e.g. referred by Priya, Naukri job #123" />
+            </label>
+          </div>
+
           <label className="field">
-            <span>Step 2 (optional): Add them to a job</span>
+            <span>Step 3 (optional): Add them to a job</span>
             <select value={jobId} onChange={(e) => setJobId(e.target.value)}>
               <option value="">No, just save the candidate</option>
               {openJobs.map((j) => (
@@ -137,7 +158,7 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={busy || !file}>
-              {busy ? 'Reading the resume…' : 'Step 3: Upload'}
+              {busy ? 'Reading the resume…' : 'Step 4: Upload'}
             </button>
           </div>
         </form>

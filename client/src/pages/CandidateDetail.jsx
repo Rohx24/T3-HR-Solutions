@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks.js'
 import { formatDate, formatYears, initials, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
-import NoteForm from '../components/NoteForm.jsx'
+import CallDialog from '../components/CallDialog.jsx'
+import CallsList from '../components/CallsList.jsx'
+import { SOURCES } from '../sources.js'
 import ProfileDetails from '../components/ProfileDetails.jsx'
 import HelpBox from '../components/HelpBox.jsx'
 import ScheduleDialog, { InterviewItem } from '../components/ScheduleDialog.jsx'
@@ -29,8 +31,18 @@ export default function CandidateDetail() {
   const [addJobId, setAddJobId] = useState('')
   const [busy, setBusy] = useState(false)
   const [scheduling, setScheduling] = useState(null)
+  const [callOpen, setCallOpen] = useState(false)
+  const [editSource, setEditSource] = useState(null)
 
   const c = candidate.data
+  // While the AI is still writing up a call, refresh every few seconds until it is done.
+  const processing = c?.calls?.some((x) => x.status === 'processing')
+  useEffect(() => {
+    if (!processing) return
+    const t = setInterval(() => candidate.reload(), 4000)
+    return () => clearInterval(t)
+  }, [processing]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!c) return <PageState loading={candidate.loading} error={candidate.error} onRetry={candidate.reload} />
 
   const applications = c.applications || []
@@ -100,7 +112,8 @@ export default function CandidateDetail() {
         steps={[
           'Left side: their details, read from the resume.',
           'Right side, "Jobs this person is in": change the step to show how far they have reached.',
-          'After an interview, fill in "Write interview feedback" and press Save feedback.',
+          'After you call them, press "Add call details" to record the call live, upload a recording or type notes. The AI fills in the details.',
+          'Interview feedback for each round is added on the job\'s hiring board (Jobs, then the job, then "Rounds & feedback").',
         ]}
       />
 
@@ -119,6 +132,37 @@ export default function CandidateDetail() {
               <dd>{formatYears(c.years_experience)}</dd>
               <dt>Education</dt>
               <dd>{c.education || '-'}</dd>
+              <dt>Source</dt>
+              <dd>
+                {editSource ? (
+                  <span className="source-edit">
+                    <select value={editSource.source} onChange={(e) => setEditSource({ ...editSource, source: e.target.value })}>
+                      <option value="">Not recorded</option>
+                      {[...new Set([...SOURCES, ...(editSource.source ? [editSource.source] : [])])].map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                    <input value={editSource.source_detail} onChange={(e) => setEditSource({ ...editSource, source_detail: e.target.value })} placeholder="Details (optional)" />
+                    <button
+                      className="btn btn-small btn-primary"
+                      onClick={async () => {
+                        await api.updateCandidate(c.id, editSource)
+                        setEditSource(null)
+                        candidate.reload()
+                      }}
+                    >
+                      Save
+                    </button>
+                  </span>
+                ) : (
+                  <>
+                    {c.source ? `${c.source}${c.source_detail ? ` · ${c.source_detail}` : ''}` : <span className="muted">Not recorded</span>}{' '}
+                    <button className="link-btn" onClick={() => setEditSource({ source: c.source || '', source_detail: c.source_detail || '' })}>
+                      Change
+                    </button>
+                  </>
+                )}
+              </dd>
               <dt>First seen</dt>
               <dd>{formatDate(c.created_at)}</dd>
               <dt>Times applied</dt>
@@ -204,9 +248,14 @@ export default function CandidateDetail() {
             )}
           </section>
 
-          <section className="card" data-tour="note-form">
-            <h2 className="card-title">Write interview feedback</h2>
-            <NoteForm candidateId={c.id} applications={applications} onSaved={() => candidate.reload()} />
+          <section className="card" data-tour="calls">
+            <div className="card-title-row">
+              <h2 className="card-title">Calls with this candidate</h2>
+              <button className="btn btn-primary" onClick={() => setCallOpen(true)}>
+                + Add call details
+              </button>
+            </div>
+            <CallsList calls={c.calls} onChanged={() => candidate.reload()} />
           </section>
 
           <section className="card">
@@ -218,12 +267,14 @@ export default function CandidateDetail() {
                     <li key={item.key} className="tl-item tl-note">
                       <div className="tl-head">
                         {item.round && <StageBadge stage={item.round} />}
+                        {item.decision && <span className={`decision d-${item.decision.toLowerCase().replace(/\s+/g, '-')}`}>{item.decision}</span>}
                         {item.rating ? <Stars value={item.rating} /> : null}
                         <span className="muted small">{timeAgo(item.created_at)}</span>
                       </div>
                       <p className="tl-body">{item.body}</p>
                       <span className="muted small">
                         {item.author || 'Unknown'}
+                        {item.evaluator_company ? ` (${item.evaluator_company})` : ''}
                         {item.job_title ? ` · ${item.job_title}` : ''}
                       </span>
                     </li>
@@ -250,6 +301,7 @@ export default function CandidateDetail() {
         onClose={() => setScheduling(null)}
         onSaved={() => candidate.reload()}
       />
+      <CallDialog open={callOpen} candidate={c} onClose={() => setCallOpen(false)} onSaved={() => candidate.reload()} />
     </>
   )
 }

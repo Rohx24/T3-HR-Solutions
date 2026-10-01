@@ -12,6 +12,7 @@ import Jobs from './pages/Jobs.jsx'
 import JobDetail from './pages/JobDetail.jsx'
 import Landing from './pages/Landing.jsx'
 import { Login, Signup } from './pages/AuthPages.jsx'
+import FeedbackPage from './pages/FeedbackPage.jsx'
 
 function NotFound() {
   return (
@@ -100,6 +101,15 @@ function PublicRoutes() {
 
 export default function App() {
   const { status } = useAuth()
+  const location = useLocation()
+  // The client interviewer's feedback form is public: no sign-in, no app chrome.
+  if (location.pathname.startsWith('/feedback/')) {
+    return (
+      <Routes>
+        <Route path="/feedback/:token" element={<FeedbackPage />} />
+      </Routes>
+    )
+  }
   if (status === 'loading') return <Splash />
   return status === 'authed' ? <AppShell /> : <PublicRoutes />
 }

@@ -51,7 +51,7 @@ export default function Dashboard() {
   const { data, error, loading, reload } = useApi(() => api.stats(), [])
   if (!data) return <PageState loading={loading} error={error} onRetry={reload} />
 
-  const { totals = {}, funnel = [], top_skills = [], roles = [], recent_events = [], upcoming_interviews = [] } = data
+  const { totals = {}, funnel = [], top_skills = [], roles = [], recent_events = [], upcoming_interviews = [], sources = [] } = data
   if (!totals.candidates && !totals.open_jobs) return <Welcome user={user} />
   const counts = Object.fromEntries(funnel.map((f) => [f.stage, f.count]))
   const stages = funnel.map((f) => f.stage)
@@ -151,6 +151,27 @@ export default function Dashboard() {
                   </Link>
                   <div className="bar-track">
                     <div className="bar-fill accent-fill" style={{ width: `${(s.count / maxSkill) * 100}%` }} />
+                  </div>
+                  <span className="bar-value">{s.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No candidates yet.</p>
+          )}
+        </section>
+
+        <section className="card rise" style={{ '--i': 6 }}>
+          <h2 className="card-title">Where candidates come from</h2>
+          {sources.length ? (
+            <div className="bars">
+              {sources.map((s) => (
+                <div className="bar-row" key={s.source}>
+                  <Link className="bar-label link" to={s.source === 'Not recorded' ? '/candidates' : `/candidates?source=${encodeURIComponent(s.source)}`}>
+                    {s.source}
+                  </Link>
+                  <div className="bar-track">
+                    <div className="bar-fill accent-fill" style={{ width: `${(s.count / Math.max(1, ...sources.map((x) => x.count))) * 100}%` }} />
                   </div>
                   <span className="bar-value">{s.count}</span>
                 </div>

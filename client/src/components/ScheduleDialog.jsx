@@ -27,7 +27,7 @@ export default function ScheduleDialog({ application, title, onClose, onSaved })
   useEffect(() => {
     if (!application) return
     setForm({
-      round: suggestedRound(application),
+      round: application.round || suggestedRound(application),
       date: toLocalInput(tomorrow),
       time: '11:00',
       duration: '45',

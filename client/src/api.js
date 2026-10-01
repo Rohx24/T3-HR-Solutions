@@ -44,14 +44,21 @@ export const api = {
   candidates: (params) => request(`/candidates${query(params)}`),
   exportUrl: (params) => `/api/candidates/export.csv${query(params)}`,
   candidate: (id) => request(`/candidates/${id}`),
-  uploadResume: (file, jobId) => {
+  uploadResume: (file, jobId, source = {}) => {
     const form = new FormData()
     form.append('resume', file)
     if (jobId) form.append('job_id', jobId)
+    if (source.source) form.append('source', source.source)
+    if (source.source_detail) form.append('source_detail', source.source_detail)
     return request('/candidates/upload', { method: 'POST', body: form })
   },
   resumeUrl: (id) => `/api/candidates/${id}/resume`,
   addNote: (candidateId, note) => request(`/candidates/${candidateId}/notes`, json('POST', note)),
+  updateCandidate: (id, data) => request(`/candidates/${id}`, json('PATCH', data)),
+  logCall: (candidateId, form) => request(`/candidates/${candidateId}/calls`, { method: 'POST', body: form }),
+  retryCall: (id) => request(`/calls/${id}/retry`, { method: 'POST' }),
+  callAudioUrl: (id) => `/api/calls/${id}/audio`,
+  feedbackLink: (interviewId) => request(`/interviews/${interviewId}/feedback-link`, { method: 'POST' }),
 
   companies: () => request('/companies'),
   createCompany: (data) => request('/companies', json('POST', data)),

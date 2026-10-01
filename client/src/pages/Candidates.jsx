@@ -6,6 +6,7 @@ import { formatYears, initials, timeAgo } from '../utils.js'
 import UploadResume from '../components/UploadResume.jsx'
 import { PageHeader, PageState, ReturningBadge, SkillChips, Spinner } from '../components/ui.jsx'
 import HelpBox from '../components/HelpBox.jsx'
+import { SOURCES } from '../sources.js'
 
 export default function Candidates() {
   const navigate = useNavigate()
@@ -13,12 +14,13 @@ export default function Candidates() {
   const [q, setQ] = useState(params.get('q') || '')
   const role = params.get('role') || ''
   const skill = params.get('skill') || ''
+  const source = params.get('source') || ''
   // /candidates?upload=1 (from the dashboard's welcome panel) opens the upload dialog straight away.
   const [uploadOpen, setUploadOpen] = useState(params.get('upload') === '1')
   const dq = useDebounced(q)
 
   const meta = useApi(() => api.meta(), [])
-  const list = useApi(() => api.candidates({ q: dq, role, skill }), [dq, role, skill])
+  const list = useApi(() => api.candidates({ q: dq, role, skill, source }), [dq, role, skill, source])
 
   function setFilter(key, value) {
     const next = new URLSearchParams(params)
@@ -27,7 +29,7 @@ export default function Candidates() {
     setParams(next, { replace: true })
   }
 
-  const filtered = Boolean(dq || role || skill)
+  const filtered = Boolean(dq || role || skill || source)
   const candidates = list.data || []
 
   return (
@@ -78,6 +80,12 @@ export default function Candidates() {
             <option key={s}>{s}</option>
           ))}
         </select>
+        <select value={source} onChange={(e) => setFilter('source', e.target.value)} aria-label="Filter by source">
+          <option value="">All sources</option>
+          {SOURCES.map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
         {filtered && (
           <button
             className="btn btn-ghost"
@@ -119,6 +127,7 @@ export default function Candidates() {
                   <th>Role</th>
                   <th>Experience</th>
                   <th>Top skills</th>
+                  <th>Source</th>
                   <th className="num">Applications</th>
                   <th>Last active</th>
                 </tr>
@@ -143,6 +152,7 @@ export default function Candidates() {
                     <td>
                       <SkillChips skills={c.skills} max={4} />
                     </td>
+                    <td className="muted">{c.source || '-'}</td>
                     <td className="num">{c.application_count ?? 0}</td>
                     <td className="muted">{timeAgo(c.last_applied_at || c.created_at)}</td>
                   </tr>
