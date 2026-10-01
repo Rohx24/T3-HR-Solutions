@@ -124,6 +124,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_events_candidate ON events(candidate_id, created_at);
 `);
 
+// Additive migrations: add columns to existing databases without touching any data.
+for (const [table, column, type] of [
+  ['candidates', 'profile', 'TEXT'], // full structured profile from the AI parser (JSON)
+  ['candidates', 'parsed_by', 'TEXT'], // "gpt-4.1-mini" or "rules"
+]) {
+  const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!has) {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    } catch (err) {
+      if (!/duplicate column/i.test(err.message)) throw err; // another replica added it first
+    }
+  }
+}
+
 export const now = () => new Date().toISOString();
 
 // Re-entrant transaction: nested calls join the outer transaction.

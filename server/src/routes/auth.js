@@ -44,7 +44,8 @@ router.post('/signup', signupLimit, async (req, res) => {
     email,
     passwordHash: await hashPassword(password),
     workspaceName: req.body?.workspace_name,
-    seed: req.body?.sample_data === false ? null : seed,
+    // New workspaces start empty; example data only when explicitly requested.
+    seed: req.body?.sample_data === true ? seed : null,
   });
   res.status(201).json(startSession(req, res, user));
 });
@@ -66,7 +67,7 @@ router.post('/google', googleLimit, async (req, res) => {
     const existing = findUserByEmail(g.email);
     user = existing
       ? linkGoogle(existing.id, g.sub, g.picture)
-      : createAccount({ name: g.name, email: g.email, googleSub: g.sub, avatarUrl: g.picture, seed });
+      : createAccount({ name: g.name, email: g.email, googleSub: g.sub, avatarUrl: g.picture });
   }
   res.json(startSession(req, res, user));
 });

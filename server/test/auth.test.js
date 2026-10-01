@@ -83,3 +83,19 @@ test('workspaces are isolated: one tenant cannot see or touch another tenant’s
   const detail = as(alice, () => getCandidateDetail(aliceCandidate));
   assert.equal(detail.events[0].actor, 'Alice Shah', 'events record who acted');
 });
+
+test('clearing a workspace removes only that workspace’s data', async () => {
+  const { clearWorkspace } = await import('../src/services.js');
+  const carol = createAccount({ name: 'Carol Das', email: 'carol@agency-c.com' });
+  const dev = createAccount({ name: 'Dev Patel', email: 'dev@agency-d.com' });
+  const resume = parseResume('Arjun Mehta\narjun@example.com\nPython, Django, AWS. 5 years of experience.');
+  as(carol, () => {
+    upsertCandidate(resume);
+    createJob({ company_id: createCompany({ name: 'Nimbus' }).id, title: 'Python Dev', required_skills: ['Python'] });
+  });
+  const devCandidate = as(dev, () => upsertCandidate(resume).id);
+
+  const result = as(carol, () => clearWorkspace());
+  assert.deepEqual({ ...result, files: undefined }, { candidates: 1, jobs: 1, companies: 1, files: undefined });
+  assert.ok(as(dev, () => getCandidateDetail(devCandidate)), 'other workspaces are untouched');
+});

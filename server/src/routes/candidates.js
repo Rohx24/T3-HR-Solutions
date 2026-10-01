@@ -4,7 +4,8 @@ import path from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
 import { db, toCandidate, UPLOAD_DIR, HttpError } from '../db.js';
-import { extractText, parseResume, ALLOWED_EXTENSIONS } from '../parser.js';
+import { extractText, ALLOWED_EXTENSIONS } from '../parser.js';
+import { parseResumeSmart } from '../aiParser.js';
 import { upsertCandidate, addApplication, addNote, getCandidateDetail, getJob } from '../services.js';
 import { toCsv } from '../csv.js';
 import { rateLimit } from '../ratelimit.js';
@@ -76,7 +77,8 @@ router.post('/upload', uploadLimit, upload.single('resume'), bindContext, async 
   }
   if (text.trim().length < 30) throw new HttpError(422, 'No readable text found (scanned image PDFs are not supported yet)');
 
-  const parsed = parseResume(text);
+  // GPT-4.1 mini when OPENAI_API_KEY is set, rule-based parser otherwise (or if the AI call fails).
+  const parsed = await parseResumeSmart(text);
   const stored = `${crypto.randomUUID()}${path.extname(req.file.originalname).toLowerCase()}`;
   fs.writeFileSync(path.join(UPLOAD_DIR, stored), req.file.buffer);
 
@@ -94,7 +96,7 @@ router.post('/upload', uploadLimit, upload.single('resume'), bindContext, async 
     }
   }
 
-  res.status(201).json({ candidate: getCandidateDetail(id), returning, application });
+  res.status(201).json({ candidate: getCandidateDetail(id), returning, application, parse_warning: parsed.parse_warning ?? null });
 });
 
 router.get('/:id', (req, res) => {

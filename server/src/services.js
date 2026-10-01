@@ -4,6 +4,14 @@ import { STAGES, normalizeSkills } from './skills.js';
 import { scoreMatch } from './matching.js';
 import { workspaceId, currentUser } from './context.js';
 
+const parseProfile = (json) => {
+  if (!json) return null;
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
 const monthYear = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
 // Every event records who did it (the signed-in user), so activity feeds read "by <name>".
@@ -59,6 +67,8 @@ export function getCandidateDetail(id) {
     resume_text: row.resume_text,
     has_resume_file: Boolean(row.resume_file),
     resume_filename: row.resume_filename,
+    profile: parseProfile(row.profile),
+    parsed_by: row.parsed_by ?? 'rules',
     applications,
     notes,
     events,
@@ -76,12 +86,13 @@ export function upsertCandidate(parsed, file = {}, at = now()) {
     if (!existing) {
       const { lastInsertRowid } = db.prepare(`
         INSERT INTO candidates (workspace_id, name, email, phone, location, years_experience, education, primary_role, skills,
-                                resume_text, resume_file, resume_filename, times_applied, created_at, last_applied_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                resume_text, resume_file, resume_filename, profile, parsed_by, times_applied, created_at, last_applied_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(
         ws, parsed.name, parsed.email, parsed.phone, parsed.location, parsed.years_experience, parsed.education,
         parsed.primary_role, JSON.stringify(parsed.skills), parsed.resume_text,
-        file.stored ?? null, file.original ?? null, at, at,
+        file.stored ?? null, file.original ?? null,
+        parsed.profile ? JSON.stringify(parsed.profile) : null, parsed.parsed_by ?? 'rules', at, at,
       );
       const id = Number(lastInsertRowid);
       addEvent(id, 'created', `Resume parsed: ${parsed.primary_role} · ${parsed.skills.length} skills found`, at);
@@ -95,7 +106,8 @@ export function upsertCandidate(parsed, file = {}, at = now()) {
     db.prepare(`
       UPDATE candidates SET
         name = ?, phone = ?, location = ?, years_experience = ?, education = ?, primary_role = ?, skills = ?,
-        resume_text = ?, resume_file = ?, resume_filename = ?, times_applied = times_applied + 1, last_applied_at = ?
+        resume_text = ?, resume_file = ?, resume_filename = ?, profile = ?, parsed_by = ?,
+        times_applied = times_applied + 1, last_applied_at = ?
       WHERE id = ?
     `).run(
       parsed.name !== 'Unknown Candidate' ? parsed.name : existing.name,
@@ -108,6 +120,8 @@ export function upsertCandidate(parsed, file = {}, at = now()) {
       parsed.resume_text,
       file.stored ?? existing.resume_file,
       file.original ?? existing.resume_filename,
+      parsed.profile ? JSON.stringify(parsed.profile) : existing.profile,
+      parsed.profile ? parsed.parsed_by : existing.parsed_by ?? parsed.parsed_by ?? 'rules',
       at,
       existing.id,
     );
@@ -214,4 +228,18 @@ export function createJob({ company_id, title, required_skills, description, sta
     INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(ws, Number(company_id), t, JSON.stringify(normalizeSkills(required_skills)), description ?? null, status, at);
   return getJob(Number(lastInsertRowid));
+}
+
+// Deletes every candidate, job and company in the current workspace (applications, notes and events
+// cascade). Returns the stored resume file names so the caller can remove them from disk.
+export function clearWorkspace() {
+  const ws = workspaceId();
+  return tx(() => {
+    const files = db.prepare('SELECT resume_file FROM candidates WHERE workspace_id = ? AND resume_file IS NOT NULL')
+      .all(ws).map((r) => r.resume_file);
+    const candidates = db.prepare('DELETE FROM candidates WHERE workspace_id = ?').run(ws).changes;
+    const jobs = db.prepare('DELETE FROM jobs WHERE workspace_id = ?').run(ws).changes;
+    const companies = db.prepare('DELETE FROM companies WHERE workspace_id = ?').run(ws).changes;
+    return { candidates, jobs, companies, files };
+  });
 }

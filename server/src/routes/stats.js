@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { db, parseList } from '../db.js';
-import { STAGES, ROLES, SKILLS } from '../skills.js';
+import { STAGES, SKILLS } from '../skills.js';
 import { workspaceId } from '../context.js';
+import { AI_MODEL, aiEnabled } from '../aiParser.js';
 
 const router = Router();
 
@@ -51,11 +52,17 @@ router.get('/stats', (req, res) => {
 });
 
 router.get('/meta', (req, res) => {
+  // Roles come from the workspace's own candidates, so any profession (not just tech) can be filtered.
+  const roles = db.prepare(`
+    SELECT DISTINCT primary_role AS role FROM candidates
+    WHERE workspace_id = ? AND primary_role IS NOT NULL AND primary_role <> '' ORDER BY role
+  `).all(workspaceId()).map((r) => r.role);
   res.json({
     stages: STAGES,
-    roles: ROLES,
+    roles,
     skills: skillCounts().map((s) => s.skill).sort((a, b) => a.localeCompare(b)),
     all_skills: Object.keys(SKILLS).sort((a, b) => a.localeCompare(b)),
+    parser: aiEnabled() ? { ai: true, model: AI_MODEL } : { ai: false, model: 'rules' },
   });
 });
 
