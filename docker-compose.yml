@@ -1,7 +1,8 @@
 # Production stack: Nginx load balancer -> 2 app replicas -> Redis, sharing one data volume.
 #   docker compose up -d --build            (local: http://localhost)
 #   HTTP_BIND=127.0.0.1:8080 docker compose up -d    (EC2: Caddy terminates TLS and proxies to :8080)
-# Optional variables (read from a .env file next to this one): GOOGLE_CLIENT_ID, DEMO_PASSWORD, HTTP_BIND.
+# Optional variables (read from a .env file next to this one): GOOGLE_CLIENT_ID, OPENAI_API_KEY, OPENAI_MODEL,
+# DEMO_PASSWORD, HTTP_BIND.
 
 x-app-env: &app-env
   NODE_ENV: production
@@ -9,6 +10,9 @@ x-app-env: &app-env
   # Caddy -> Nginx -> app: trust two proxy hops for the client IP and HTTPS detection.
   TRUST_PROXY: "2"
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  # AI resume parsing (GPT-4o mini). Without a key the rule-based parser is used.
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
   DEMO_PASSWORD: ${DEMO_PASSWORD:-demo1234}
 
 services:

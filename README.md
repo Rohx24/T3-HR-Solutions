@@ -33,6 +33,8 @@ Recruiters upload resumes; the system parses them into a searchable **talent poo
 
 ## System design
 
+> **Production setup** (HTTPS, Nginx load balancing over two app replicas, Redis caching and rate limits, multi-tenant accounts, AI resume parsing): see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Live at https://34-229-222-193.sslip.io
+
 ### Architecture
 
 ```mermaid
