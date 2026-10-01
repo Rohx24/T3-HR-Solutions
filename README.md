@@ -1,8 +1,10 @@
 # T3 HR Solutions
 
-An **Applicant Tracking System (ATS)** for recruiters and staffing teams, and the first module of a full HR suite (HRIS).
+Built for **[T3Cogno](https://www.t3cogno.com/)**, an HR services and outsourced-CHRO partner providing talent acquisition, HR and payroll services to 100+ client companies across healthcare, startups and product companies.
 
-Recruiters upload resumes; the system parses them into a searchable **talent pool**, tracks every candidate through **interview rounds with comments and ratings**, and recognises **returning candidates**, so a profile built for one client company can be reused for another months or years later.
+This is an **Applicant Tracking System (ATS)** for T3Cogno's talent acquisition practice, and the first module of a full HR suite (HRIS).
+
+Recruiters upload resumes; the system parses them into a searchable **talent pool**, tracks every candidate through **interview rounds with comments and ratings**, and recognises **returning candidates**. Because T3Cogno hires for many client companies, a profile built for one client can be reused for another months or years later instead of being sourced again from scratch.
 
 **Core capabilities**
 - Resume parsing (PDF / DOCX / TXT) → name, contact, skills, experience, education, primary role
@@ -149,4 +151,10 @@ A multi-stage Docker build compiles the React app and packages it with the API i
 
 ### Roadmap
 
-ATS → **HRIS** (employee records, onboarding, leave & attendance, documents) → **HR insights** (attrition / engagement early-warning signals, analytics dashboards).
+Mapped to T3Cogno's service lines:
+
+| Phase | Module | T3Cogno service |
+|---|---|---|
+| 1 (this repo) | **ATS**: talent pool, pipelines, interview rounds | Talent Acquisition |
+| 2 | **HRIS**: employee records, onboarding, leave & attendance, documents | HR Services |
+| 3 | **Payroll & HR insights**: payroll runs, attrition / engagement early-warning signals, analytics dashboards | Payroll Services, CHRO advisory |
