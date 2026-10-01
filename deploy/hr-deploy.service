@@ -1,0 +1,9 @@
+[Unit]
+Description=Deploy T3Cogno Talent from GitHub main once its tests pass
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hr-deploy
+TimeoutStartSec=25min

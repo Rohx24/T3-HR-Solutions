@@ -64,7 +64,7 @@ if (!isProd) {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, instance: INSTANCE, cache: redisStatus(), uptime_s: Math.round(process.uptime()) });
+  res.json({ ok: true, version: process.env.GIT_SHA || 'dev', instance: INSTANCE, cache: redisStatus(), uptime_s: Math.round(process.uptime()) });
 });
 app.use('/api/auth', auth);
 // No login needed: the client interviewer's feedback form.

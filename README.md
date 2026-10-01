@@ -184,13 +184,13 @@ Demo login: `demo@t3hr.app` / `demo1234` (shown on the sign-in page).
 
 ## Deploy
 
-The live server is an AWS EC2 instance with Caddy for HTTPS in front of the Docker Compose stack:
+**Push to `main` and it goes live**, with no server access needed:
 
-```bash
-HTTP_BIND=127.0.0.1:8080 docker compose up -d --no-build
-```
+1. GitHub Actions runs the server tests and a client build on every push ([ci.yml](.github/workflows/ci.yml)).
+2. The EC2 server checks GitHub every 2 minutes. When a new commit on `main` has passed the tests, it builds it and does a rolling update (app2, then app1, then an Nginx reload) with automatic rollback if a replica fails its health check.
+3. `GET /api/health` shows the live commit in `"version"`.
 
-Rolling update: build the image, then recreate `app2`, wait until healthy, recreate `app1`, and reload Nginx. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Details, security model and the restricted manual-deploy key: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Configuration
 

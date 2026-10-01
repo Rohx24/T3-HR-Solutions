@@ -10,7 +10,9 @@ RUN if [ -f client/package.json ]; then \
 
 # Stage 2: API server that also serves client/dist
 FROM node:24-slim
-ENV NODE_ENV=production PORT=4000
+# The commit being deployed, shown at /api/health so anyone can see which version is live.
+ARG GIT_SHA=dev
+ENV NODE_ENV=production PORT=4000 GIT_SHA=$GIT_SHA
 # ffmpeg converts call recordings (amr, 3gp, m4a, webm...) to compact speech audio for transcription.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/server

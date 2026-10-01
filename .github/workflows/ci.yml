@@ -1,0 +1,30 @@
+# Runs on every push and pull request. The EC2 server only deploys commits on main whose
+# "test" job passed (see deploy/hr-deploy.sh), so this job is the gate for production.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Server tests
+        run: |
+          npm ci --prefix server
+          npm test --prefix server
+
+      - name: Client build
+        run: |
+          npm ci --prefix client
+          npm run build --prefix client
