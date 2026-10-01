@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+server/data
+.git
+.env
+.env.*
+graphify-out
+*.log
+.DS_Store

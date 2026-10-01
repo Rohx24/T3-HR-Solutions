@@ -1,0 +1,9 @@
+Neha Gupta
+QA Engineer | Pune
+neha.gupta@example.com | +91 98220 34343
+
+2 years of experience in manual and automation testing for fintech web apps.
+
+Skills: Selenium, Cypress, Postman, Manual Testing, JMeter, SQL, Jira, Agile
+
+Education: B.Tech Information Technology

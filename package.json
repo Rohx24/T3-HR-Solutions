@@ -1,0 +1,14 @@
+{
+  "name": "t3-hr-solutions",
+  "private": true,
+  "description": "Full-stack ATS prototype (baseline for an HR suite)",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client ci && npm --prefix client run build",
+    "start": "NODE_ENV=production npm --prefix server start",
+    "seed": "npm --prefix server run seed",
+    "test": "npm --prefix server test"
+  }
+}

@@ -22,3 +22,6 @@ coverage/
 
 # Local tooling
 graphify-out/
+
+# App data (SQLite DB + uploaded resumes)
+server/data/

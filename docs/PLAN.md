@@ -51,7 +51,10 @@ HR-int/
 │       ├── parser.js       ← resume text → structured candidate
 │       ├── skills.js       ← skills dictionary + role rules
 │       ├── matching.js     ← job ↔ candidate match score
+│       ├── services.js     ← write-side business logic (upsert/dedupe, stages, notes)
+│       ├── seed.js         ← demo data (runs automatically on an empty DB)
 │       └── routes/         ← candidates, jobs, companies, applications, stats
+│   └── test/               ← node:test unit tests (`npm test`)
 └── client/                                                         [Sushrith]
     ├── package.json
     ├── vite.config.js      ← proxy /api → http://localhost:4000
@@ -185,7 +188,7 @@ Base URL: `/api`. JSON in and out. Errors always look like `{ "error": "message"
 | Method | Path | Body / Query | Returns |
 |---|---|---|---|
 | GET | `/health` | | `{ "ok": true }` |
-| GET | `/meta` | | `{ stages[], roles[], skills[] }` for dropdowns |
+| GET | `/meta` | | `{ stages[], roles[], skills[], all_skills[] }` for dropdowns (`skills` = in the pool, `all_skills` = whole dictionary, for the New Job form) |
 | GET | `/stats` | | dashboard object (below) |
 | GET | `/candidates` | `?q=&skill=&role=` | `Candidate[]` |
 | POST | `/candidates/upload` | multipart: `resume` (file), `job_id` (optional) | `201 { candidate, returning, application }` |
@@ -197,6 +200,7 @@ Base URL: `/api`. JSON in and out. Errors always look like `{ "error": "message"
 | GET | `/jobs` | | `Job[]` (with stage counts) |
 | POST | `/jobs` | `{ company_id, title, required_skills: string[], description }` | `201 Job` |
 | GET | `/jobs/:id` | | `JobDetail` (pipeline) |
+| PATCH | `/jobs/:id` | `{ status?, title?, description?, required_skills? }` | `Job` (e.g. close/reopen a job) |
 | GET | `/jobs/:id/matches` | | `Match[]` (sorted by score desc) |
 | POST | `/applications` | `{ candidate_id, job_id }` | `201 Application` (`409` if already in pipeline) |
 | PATCH | `/applications/:id` | `{ stage }` | `Application` |
@@ -340,13 +344,17 @@ Run the backend locally: `cd server && npm install && npm run dev` (port 4000), 
 
 ## 7. Work split
 
-### Rohit: Backend + Deployment (`server/`, `Dockerfile`, `deploy/`, `samples/`)
-- [ ] Express app, `node:sqlite` schema, seed data (3 companies, 3 jobs, ~8 candidates incl. 1 "returning" from 2024, notes, events)
-- [ ] Resume parser + skills dictionary + role detection
-- [ ] Dedupe by email (returning-candidate merge + event)
-- [ ] All endpoints in §5 + match scoring
-- [ ] Serve `client/dist` in production; root `npm run build` / `npm start`
-- [ ] Dockerfile + `deploy/ec2-setup.sh`; deploy to EC2; smoke test
+### Rohit: Backend + Deployment (`server/`, `Dockerfile`, `deploy/`, `samples/`) ✅ backend done
+- [x] Express app, `node:sqlite` schema, seed data (3 companies, 4 jobs, 10 candidates incl. 2 "returning", notes, events)
+- [x] Resume parser + skills dictionary + role detection (PDF, DOCX, TXT)
+- [x] Dedupe by email (returning-candidate merge + event)
+- [x] All endpoints in §5 + match scoring, validation & JSON errors
+- [x] Serve `client/dist` in production; root `npm run build` / `npm start`
+- [x] Dockerfile (tested locally) + `deploy/ec2-setup.sh`
+- [ ] Launch EC2 + deploy once the client is pushed; smoke test
+
+> **Sushrith: the real API is ready.** `cd server && npm install && npm run dev` gives you the API on :4000 with demo data, so you can skip the mocks.
+> Demo resumes to upload are in `samples/` (Priya's 2026 PDF = returning candidate, Arjun = new).
 
 ### Sushrith: Frontend (`client/`)
 - [ ] Vite + React app shell, sidebar, routing, `api.js`, `styles.css`
