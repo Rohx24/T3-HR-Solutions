@@ -2,12 +2,18 @@ import { Router } from 'express';
 import { HttpError } from '../db.js';
 import { seed, DEMO_ACCOUNT } from '../seed.js';
 import {
-  SESSION_COOKIE, authRateLimit, clearSessionCookie, createAccount, createSession, destroySession,
+  SESSION_COOKIE, clearSessionCookie, createAccount, createSession, destroySession,
   findUserByEmail, findUserByGoogle, hashPassword, linkGoogle, publicUser, readCookie, setSessionCookie,
   userForToken, validateSignup, verifyGoogleCredential, verifyPassword,
 } from '../auth.js';
+import { rateLimit } from '../ratelimit.js';
 
 const router = Router();
+// Shared across all app instances via Redis: per IP, per 15 minutes.
+const AUTH_LIMIT = { windowSec: 15 * 60, message: 'Too many attempts. Please wait a few minutes and try again.' };
+const signupLimit = rateLimit({ name: 'signup', max: 10, ...AUTH_LIMIT });
+const loginLimit = rateLimit({ name: 'login', max: 10, ...AUTH_LIMIT });
+const googleLimit = rateLimit({ name: 'google', max: 20, ...AUTH_LIMIT });
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || null;
 // Compared against when the email is unknown, so a miss takes as long as a wrong password.
 const DUMMY_HASH = await hashPassword('timing-equaliser');
@@ -31,7 +37,7 @@ router.get('/me', (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-router.post('/signup', authRateLimit({ max: 10 }), async (req, res) => {
+router.post('/signup', signupLimit, async (req, res) => {
   const { name, email, password } = validateSignup(req.body);
   const user = createAccount({
     name,
@@ -43,7 +49,7 @@ router.post('/signup', authRateLimit({ max: 10 }), async (req, res) => {
   res.status(201).json(startSession(req, res, user));
 });
 
-router.post('/login', authRateLimit({ max: 10 }), async (req, res) => {
+router.post('/login', loginLimit, async (req, res) => {
   const email = String(req.body?.email ?? '').trim();
   const password = String(req.body?.password ?? '');
   if (!email || !password) throw new HttpError(400, 'Enter your email and password');
@@ -53,7 +59,7 @@ router.post('/login', authRateLimit({ max: 10 }), async (req, res) => {
   res.json(startSession(req, res, user));
 });
 
-router.post('/google', authRateLimit({ max: 20 }), async (req, res) => {
+router.post('/google', googleLimit, async (req, res) => {
   const g = await verifyGoogleCredential(req.body?.credential, GOOGLE_CLIENT_ID);
   let user = findUserByGoogle(g.sub);
   if (!user) {

@@ -1,0 +1,70 @@
+# Production stack: Nginx load balancer -> 2 app replicas -> Redis, sharing one data volume.
+#   docker compose up -d --build            (local: http://localhost)
+#   HTTP_BIND=127.0.0.1:8080 docker compose up -d    (EC2: Caddy terminates TLS and proxies to :8080)
+# Optional variables (read from a .env file next to this one): GOOGLE_CLIENT_ID, DEMO_PASSWORD, HTTP_BIND.
+
+x-app-env: &app-env
+  NODE_ENV: production
+  REDIS_URL: redis://redis:6379
+  # Caddy -> Nginx -> app: trust two proxy hops for the client IP and HTTPS detection.
+  TRUST_PROXY: "2"
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  DEMO_PASSWORD: ${DEMO_PASSWORD:-demo1234}
+
+services:
+  redis:
+    image: redis:7-alpine
+    # Pure cache: bounded memory, evict least-recently-used keys, no persistence needed.
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app1:
+    image: hr-int:latest
+    build: .
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      INSTANCE_NAME: app1
+    volumes:
+      - hr-data:/app/server/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  app2:
+    image: hr-int:latest
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      INSTANCE_NAME: app2
+      # app1 seeds the demo workspace; app2 starts after it so they never race on first boot.
+      SEED: "false"
+    volumes:
+      - hr-data:/app/server/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      app1:
+        condition: service_healthy
+
+  lb:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_BIND:-80}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      app1:
+        condition: service_healthy
+      app2:
+        condition: service_healthy
+
+volumes:
+  hr-data:
+    name: hr-data

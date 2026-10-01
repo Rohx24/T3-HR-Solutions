@@ -7,6 +7,7 @@ import { db, toCandidate, UPLOAD_DIR, HttpError } from '../db.js';
 import { extractText, parseResume, ALLOWED_EXTENSIONS } from '../parser.js';
 import { upsertCandidate, addApplication, addNote, getCandidateDetail, getJob } from '../services.js';
 import { toCsv } from '../csv.js';
+import { rateLimit } from '../ratelimit.js';
 import { idParam } from './util.js';
 import { workspaceId, bindContext } from '../context.js';
 
@@ -58,7 +59,10 @@ router.get('/export.csv', (req, res) => {
 });
 
 // POST /api/candidates/upload  (multipart: resume, job_id?)
-router.post('/upload', upload.single('resume'), bindContext, async (req, res) => {
+// Parsing is the most expensive request, so cap it per user (shared across instances via Redis).
+const uploadLimit = rateLimit({ name: 'upload', max: 30, windowSec: 60, key: (req) => req.user?.id ?? req.ip });
+
+router.post('/upload', uploadLimit, upload.single('resume'), bindContext, async (req, res) => {
   if (!req.file) throw new HttpError(400, 'Attach a resume file in the "resume" field');
 
   const jobId = req.body?.job_id ? Number(req.body.job_id) : null;

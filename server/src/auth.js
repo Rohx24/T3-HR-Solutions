@@ -143,26 +143,6 @@ export function requireAuth(req, res, next) {
   runAs(req.ctx, next);
 }
 
-// Simple in-memory limiter for login/signup attempts (per IP + route).
-const attempts = new Map();
-export function authRateLimit({ max = 10, windowMs = 15 * 60_000 } = {}) {
-  return (req, res, next) => {
-    const key = `${req.path}:${req.ip}`;
-    const t = Date.now();
-    const entry = attempts.get(key);
-    if (!entry || entry.reset < t) {
-      attempts.set(key, { count: 1, reset: t + windowMs });
-      return next();
-    }
-    entry.count += 1;
-    if (entry.count > max) {
-      res.set('Retry-After', String(Math.ceil((entry.reset - t) / 1000)));
-      throw new HttpError(429, 'Too many attempts. Please wait a few minutes and try again.');
-    }
-    next();
-  };
-}
-
 // Verifies a Google Identity Services ID token (the `credential` from the Sign in with Google button).
 export async function verifyGoogleCredential(credential, clientId) {
   if (!clientId) throw new HttpError(400, 'Google sign-in is not configured on this server');

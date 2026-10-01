@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -11,11 +12,17 @@ import applications from './routes/applications.js';
 import stats from './routes/stats.js';
 import auth from './routes/auth.js';
 import { requireAuth } from './auth.js';
+import { connectRedis, disconnectRedis, redisStatus } from './redis.js';
+import { apiCache } from './cache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4000);
 const CLIENT_DIST = process.env.CLIENT_DIST ?? path.resolve(__dirname, '../../client/dist');
 const isProd = process.env.NODE_ENV === 'production';
+// Which replica answered (set per container in docker-compose); shown in X-Served-By and /api/health.
+const INSTANCE = process.env.INSTANCE_NAME || os.hostname();
+
+connectRedis();
 
 await seedIfEmpty();
 
@@ -24,6 +31,10 @@ app.disable('x-powered-by');
 // Behind a reverse proxy (Caddy/Nginx) so req.secure and req.ip reflect the real client: TRUST_PROXY=1.
 if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  res.set('X-Served-By', INSTANCE);
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -46,10 +57,13 @@ if (!isProd) {
   });
 }
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, instance: INSTANCE, cache: redisStatus(), uptime_s: Math.round(process.uptime()) });
+});
 app.use('/api/auth', auth);
 // Everything below requires a session and only sees the signed-in user's workspace.
 app.use('/api', requireAuth);
+app.use('/api', apiCache);
 app.use('/api', stats);
 app.use('/api/candidates', candidates);
 app.use('/api/jobs', jobs);
@@ -81,4 +95,15 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: message });
 });
 
-app.listen(PORT, () => console.log(`HR-int server listening on http://localhost:${PORT}`));
+const server = app.listen(PORT, () => console.log(`HR-int server (${INSTANCE}) listening on http://localhost:${PORT}`));
+
+// Graceful shutdown so the load balancer can drain this instance during a redeploy.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    server.close(async () => {
+      await disconnectRedis();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 8000).unref();
+  });
+}
