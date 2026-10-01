@@ -190,6 +190,9 @@ for (const [table, column, type] of [
   ['candidates', 'whatsapp_permission', 'TEXT'], // WhatsApp call permission request: requested | failed
   ['candidates', 'contact_preference', 'TEXT'], // how they asked to be called: whatsapp | phone
   ['calls', 'channel', 'TEXT'], // how the recruiter reached them: phone | whatsapp
+  ['calls', 'consent_basis', 'TEXT'], // recording allowed because consent was: prior (on file) | verbal (on the call)
+  ['calls', 'consent_heard', 'TEXT'], // AI check of the transcript: agreed | refused | not_discussed
+  ['calls', 'audio_deleted_at', 'TEXT'], // recording removed after notes were taken (or after the retention period)
 ]) {
   const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
   if (!has) {
@@ -200,6 +203,36 @@ for (const [table, column, type] of [
     }
   }
 }
+
+// Call-recording consent: an append-only log (the latest row per candidate is the current answer) and the
+// one-time links candidates use to answer. Only a SHA-256 of each link token is stored.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS consents (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id   INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    purpose        TEXT NOT NULL,
+    status         TEXT NOT NULL CHECK (status IN ('granted', 'refused')),
+    method         TEXT NOT NULL,
+    notice_version TEXT,
+    recorded_by    TEXT,
+    call_id        INTEGER,
+    ip             TEXT,
+    user_agent     TEXT,
+    created_at     TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_consents_candidate ON consents(candidate_id, purpose, id);
+
+  CREATE TABLE IF NOT EXISTS consent_links (
+    token_hash   TEXT PRIMARY KEY,
+    candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    purpose      TEXT NOT NULL,
+    created_by   TEXT,
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    answered_at  TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_consent_links_candidate ON consent_links(candidate_id, created_at);
+`);
 
 // Every job gets an unguessable apply token; backfill jobs created before apply links existed.
 // The IS NULL guard keeps two replicas booting together from overwriting each other's token.

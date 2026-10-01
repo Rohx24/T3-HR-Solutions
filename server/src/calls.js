@@ -20,6 +20,7 @@ import { normalizeSkills } from './skills.js';
 import { addEvent } from './services.js';
 import { workspaceId } from './context.js';
 import { invalidateWorkspace } from './cache.js';
+import { recordConsent, requireRecordingConsent, RETENTION_DAYS } from './consent.js';
 
 const run = promisify(execFile);
 const API_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
@@ -53,6 +54,11 @@ export const CALL_SCHEMA = obj({
   concerns: { ...LIST, description: 'Red flags or concerns raised in the call' },
   follow_up_actions: { ...LIST, description: 'What the recruiter needs to do next' },
   hr_comments: { ...S, description: 'Any extra remarks or opinions the recruiter expressed or typed' },
+  recording_consent: {
+    type: 'string',
+    enum: ['agreed', 'refused', 'not_discussed'],
+    description: 'Did the candidate clearly agree, on the call, to it being recorded? not_discussed if recording was never mentioned or there is no transcript',
+  },
 });
 
 const CALL_PROMPT = `You read recruitment phone calls between an HR recruiter at T3Cogno and a job candidate,
@@ -61,7 +67,8 @@ Extract the facts into the JSON schema. Rules:
 - Only use what was actually said or written. Use null or [] for anything not mentioned. Never guess.
 - Write every field in English, translating if the call was in Hindi, Telugu, Malayalam, Tamil, Kannada or another language.
 - Keep salary and notice period wording as stated (e.g. "6.5 LPA", "60 days negotiable").
-- Do not record age, religion, caste, marital status, health or other personal attributes.`;
+- Do not record age, religion, caste, marital status, health or other personal attributes.
+- recording_consent: "agreed" only if the recruiter mentioned the recording and the candidate clearly said yes (usually at the start).`;
 
 // ---------- audio ----------
 
@@ -197,7 +204,7 @@ export function applyInsights(candidateId, ins, at = now()) {
 
 // ---------- calls ----------
 
-const CALL_COLUMNS = `id, candidate_id, application_id, method, channel, audio_name, duration_seconds, notes, transcript, summary,
+const CALL_COLUMNS = `id, candidate_id, application_id, method, channel, consent_basis, consent_heard, audio_deleted_at, audio_name, duration_seconds, notes, transcript, summary,
   insights, status, error, recorded_by, created_at, (audio_file IS NOT NULL) AS has_audio`;
 
 export const toCall = (r) => r && ({ ...r, has_audio: Boolean(r.has_audio), insights: r.insights ? JSON.parse(r.insights) : null });
@@ -214,7 +221,7 @@ export function getCallScoped(id) {
   return row ?? null;
 }
 
-export function createCall({ candidateId, applicationId, method, channel, audioFile, audioName, notes, recordedBy }, at = now()) {
+export function createCall({ candidateId, applicationId, method, channel, audioFile, audioName, notes, recordedBy, consentBasis }, at = now()) {
   const cand = db.prepare('SELECT id FROM candidates WHERE id = ? AND workspace_id = ?').get(candidateId, workspaceId());
   if (!cand) throw new HttpError(404, 'Candidate not found');
   if (applicationId) {
@@ -223,13 +230,15 @@ export function createCall({ candidateId, applicationId, method, channel, audioF
   }
   const text = notes ? String(notes).trim().slice(0, 20_000) : null;
   if (!audioFile && !text) throw new HttpError(400, 'Add a recording or type some notes about the call');
+  if (audioFile) requireRecordingConsent(candidateId, consentBasis);
   // Nothing to wait for when there is no audio and no AI: save the notes straight away.
   const status = audioFile || aiEnabled() ? 'processing' : 'done';
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO calls (candidate_id, application_id, method, channel, audio_file, audio_name, notes, status, recorded_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(candidateId, applicationId || null, method, channel === 'whatsapp' ? 'whatsapp' : 'phone', audioFile ?? null, audioName ?? null, text, status, recordedBy ?? null, at, at);
+    INSERT INTO calls (candidate_id, application_id, method, channel, consent_basis, audio_file, audio_name, notes, status, recorded_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(candidateId, applicationId || null, method, channel === 'whatsapp' ? 'whatsapp' : 'phone', audioFile ? consentBasis : null, audioFile ?? null, audioName ?? null, text, status, recordedBy ?? null, at, at);
   const id = Number(lastInsertRowid);
+  if (audioFile && consentBasis === 'verbal') recordConsent(candidateId, { status: 'granted', method: 'verbal', recordedBy, callId: id }, at);
   if (status === 'done') addEvent(candidateId, 'call', 'Call notes added', at);
   return id;
 }
@@ -263,8 +272,14 @@ export async function processCall(id, { fetchImpl = fetch } = {}) {
     if (!aiEnabled()) return set({ status: 'done' });
     const insights = await extractInsights({ transcript, notes: call.notes, candidateName: cand?.name, jobTitle: job?.title }, { fetchImpl });
     const updated = applyInsights(call.candidate_id, insights);
-    set({ insights: JSON.stringify({ ...insights, updated_fields: updated }), summary: insights.summary, status: 'done', error: null });
+    const consentHeard = transcript ? insights.recording_consent ?? null : null;
+    set({ insights: JSON.stringify({ ...insights, updated_fields: updated }), summary: insights.summary, status: 'done', error: null, consent_heard: consentHeard });
     addEvent(call.candidate_id, 'call', `Call summarised${updated.length ? `; updated ${updated.join(', ').replace(/_/g, ' ')}` : ''}`);
+    if (call.consent_basis === 'verbal' && consentHeard && consentHeard !== 'agreed') {
+      addEvent(call.candidate_id, 'consent', `Check this call: the recruiter confirmed consent, but the AI did not hear the candidate agree to recording (${consentHeard.replace('_', ' ')}).`);
+    }
+    // Notes are taken: the recording itself is no longer needed.
+    if (call.audio_file) deleteRecording(call.id, call.audio_file);
   } catch (err) {
     console.warn(`Call ${id} processing failed: ${err.message}`);
     set({ status: 'failed', error: err.message.slice(0, 300) });
@@ -272,6 +287,21 @@ export async function processCall(id, { fetchImpl = fetch } = {}) {
     // The result was written outside a request, so refresh this workspace's cached pages.
     await invalidateWorkspace(workspaceId());
   }
+}
+
+// Recordings are kept only until notes are taken. These two helpers remove the audio file and mark the call.
+function deleteRecording(callId, audioFile, at = now()) {
+  fs.rmSync(path.join(UPLOAD_DIR, path.basename(audioFile)), { force: true });
+  db.prepare('UPDATE calls SET audio_file = NULL, audio_deleted_at = ? WHERE id = ?').run(at, callId);
+}
+
+// Safety net for recordings that were never transcribed (no AI key, repeated failures): delete after the
+// retention period whatever happened. Runs on every replica; deleting twice is harmless.
+export function purgeOldRecordings(at = new Date()) {
+  const cutoff = new Date(at.getTime() - RETENTION_DAYS * 86_400_000).toISOString();
+  const old = db.prepare('SELECT id, audio_file FROM calls WHERE audio_file IS NOT NULL AND created_at < ?').all(cutoff);
+  for (const c of old) deleteRecording(c.id, c.audio_file, at.toISOString());
+  return old.length;
 }
 
 // A replica that restarted mid-way leaves calls stuck in "processing"; mark those so they can be retried.

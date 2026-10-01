@@ -20,6 +20,9 @@ x-app-env: &app-env
   WHATSAPP_CALL_TEMPLATE: ${WHATSAPP_CALL_TEMPLATE:-}
   WHATSAPP_TEMPLATE_LANG: ${WHATSAPP_TEMPLATE_LANG:-en}
   WHATSAPP_DISPLAY_NUMBER: ${WHATSAPP_DISPLAY_NUMBER:-}
+  # Call-recording consent notice contact and audio retention (days).
+  PRIVACY_CONTACT_EMAIL: ${PRIVACY_CONTACT_EMAIL:-info@t3cogno.com}
+  RECORDING_RETENTION_DAYS: ${RECORDING_RETENTION_DAYS:-7}
 
 services:
   redis:

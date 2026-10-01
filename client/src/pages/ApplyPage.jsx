@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Logo from '../components/Logo.jsx'
 import ChoiceCards, { CALL_ICONS } from '../components/ChoiceCards.jsx'
 import { formatBytes } from '../utils.js'
@@ -32,7 +32,7 @@ export default function ApplyPage() {
   const [loadError, setLoadError] = useState('')
   const [file, setFile] = useState(null)
   const [dragging, setDragging] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', phone: '', contact_preference: '', consent: false, website: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', contact_preference: '', consent: false, recording_consent: false, website: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(null)
@@ -236,9 +236,16 @@ export default function ApplyPage() {
 
                 <label className="consent">
                   <input type="checkbox" checked={form.consent} onChange={set('consent')} />
+                  <span>I agree that T3Cogno may contact me about this job and similar roles.</span>
+                </label>
+                <label className="consent">
+                  <input type="checkbox" checked={form.recording_consent} onChange={set('recording_consent')} />
                   <span>
-                    I agree that T3Cogno may contact me about this job and similar roles, and that calls may be recorded so
-                    the recruiter can take notes.
+                    <strong>Optional:</strong> you may record calls with me so the recruiter's notes are accurate. Recordings are
+                    turned into text by AI and deleted once notes are taken.{' '}
+                    <Link className="link" to="/privacy" target="_blank">
+                      How we use recordings
+                    </Link>
                   </span>
                 </label>
 

@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast.jsx'
 import CallDialog from '../components/CallDialog.jsx'
 import CallsList from '../components/CallsList.jsx'
 import ContactBar from '../components/ContactBar.jsx'
+import RecordingConsent, { AskConsentDialog } from '../components/RecordingConsent.jsx'
 import { SOURCES } from '../sources.js'
 import ProfileDetails from '../components/ProfileDetails.jsx'
 import HelpBox from '../components/HelpBox.jsx'
@@ -33,6 +34,7 @@ export default function CandidateDetail() {
   const [busy, setBusy] = useState(false)
   const [scheduling, setScheduling] = useState(null)
   const [callOpen, setCallOpen] = useState(false)
+  const [askingConsent, setAskingConsent] = useState(false)
   const [editSource, setEditSource] = useState(null)
 
   const c = candidate.data
@@ -257,6 +259,7 @@ export default function CandidateDetail() {
               </button>
             </div>
             <ContactBar candidate={c} />
+            <RecordingConsent candidate={c} onChanged={() => candidate.reload()} />
             <CallsList calls={c.calls} onChanged={() => candidate.reload()} />
           </section>
 
@@ -303,7 +306,17 @@ export default function CandidateDetail() {
         onClose={() => setScheduling(null)}
         onSaved={() => candidate.reload()}
       />
-      <CallDialog open={callOpen} candidate={c} onClose={() => setCallOpen(false)} onSaved={() => candidate.reload()} />
+      <CallDialog
+        open={callOpen}
+        candidate={c}
+        onClose={() => setCallOpen(false)}
+        onSaved={() => candidate.reload()}
+        onAskConsent={() => {
+          setCallOpen(false)
+          setAskingConsent(true)
+        }}
+      />
+      <AskConsentDialog open={askingConsent} candidate={c} onClose={() => setAskingConsent(false)} onChanged={() => candidate.reload()} />
     </>
   )
 }

@@ -11,6 +11,7 @@ import { extractText } from './parser.js';
 import { parseResumeSmart } from './aiParser.js';
 import { upsertCandidate, addApplication, addEvent, updateCandidateSource } from './services.js';
 import { invalidateWorkspace } from './cache.js';
+import { recordConsent } from './consent.js';
 import { whatsappEnabled, whatsappChatLink, sendCallPermissionRequest, toWhatsAppNumber } from './whatsapp.js';
 
 // Same list as the recruiter UI; anything else from ?src= is kept as detail under "Apply link".
@@ -53,7 +54,7 @@ function sourceFrom(src) {
 
 const truthy = (v) => v === true || v === 'true' || v === 'on' || v === '1';
 
-export async function submitApplication(token, file, body = {}) {
+export async function submitApplication(token, file, body = {}, meta = {}) {
   const job = requireJob(token);
   if (job.status !== 'open') throw new HttpError(410, 'This job is no longer accepting applications.');
 
@@ -95,6 +96,8 @@ export async function submitApplication(token, file, body = {}) {
       if (err.status !== 409) throw err; // already in this job's pipeline: the new resume still updates the profile
     }
     addEvent(id, 'applied', `Applied through the apply link. Agreed to be contacted; prefers a ${whatsappOptIn ? 'WhatsApp call' : 'normal phone call'}.`, at);
+    // Recording consent is a separate, optional tick (it must not be a condition of applying).
+    if (truthy(body.recording_consent)) recordConsent(id, { status: 'granted', method: 'apply_page', ip: meta.ip, userAgent: meta.userAgent }, at);
     return id;
   });
 

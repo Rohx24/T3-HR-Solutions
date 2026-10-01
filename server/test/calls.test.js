@@ -42,6 +42,7 @@ const INSIGHTS = {
   current_location: 'Hyderabad', preferred_locations: ['Bengaluru', 'Hyderabad'], willing_to_relocate: true,
   reason_for_change: 'Growth', availability_for_interview: 'Weekdays after 6 pm', skills_mentioned: ['Kafka'],
   languages: ['Telugu', 'English'], concerns: [], follow_up_actions: ['Send JD on WhatsApp'], hr_comments: 'Good communication',
+  recording_consent: 'agreed',
 };
 
 function mockOpenAI(calls = [], { failTranscribe = false } = {}) {
@@ -73,7 +74,8 @@ test('a recorded call is transcribed, summarised and updates the profile', async
   process.env.OPENAI_API_KEY = 'test-key';
   try {
     const cand = newCandidate();
-    const id = as(() => C.createCall({ candidateId: cand, method: 'recorded', audioFile: wavFile(), audioName: 'Live recording' }));
+    const audio = wavFile();
+    const id = as(() => C.createCall({ candidateId: cand, method: 'recorded', audioFile: audio, audioName: 'Live recording', consentBasis: 'verbal', recordedBy: 'Lakshmi K' }));
     const seen = [];
     await as(() => C.processCall(id, { fetchImpl: mockOpenAI(seen) }));
     const call = C.toCall(as(() => C.getCallScoped(id)));
@@ -91,6 +93,16 @@ test('a recorded call is transcribed, summarised and updates the profile', async
     assert.ok(detail.skills.includes('Kafka'));
     assert.equal(detail.calls[0].id, id);
     assert.match(detail.events[0].message, /Call summarised/);
+
+    // Consent: confirmed on the call, logged, and the AI heard the candidate agree.
+    assert.equal(detail.recording_consent.status, 'granted');
+    assert.equal(detail.recording_consent.method, 'verbal');
+    assert.equal(call.consent_basis, 'verbal');
+    assert.equal(call.consent_heard, 'agreed');
+    // Notes are taken, so the recording is gone (file and reference).
+    assert.equal(fs.existsSync(path.join(UPLOAD_DIR, audio)), false);
+    assert.equal(call.has_audio, false);
+    assert.ok(call.audio_deleted_at);
   } finally {
     delete process.env.OPENAI_API_KEY;
   }
@@ -100,11 +112,14 @@ test('a failed transcription is marked failed with a reason (and can be retried)
   process.env.OPENAI_API_KEY = 'test-key';
   try {
     const cand = newCandidate();
-    const id = as(() => C.createCall({ candidateId: cand, method: 'uploaded', audioFile: wavFile(), audioName: 'call.wav' }));
+    const audio = wavFile();
+    const id = as(() => C.createCall({ candidateId: cand, method: 'uploaded', audioFile: audio, audioName: 'call.wav', consentBasis: 'verbal' }));
     await as(() => C.processCall(id, { fetchImpl: mockOpenAI([], { failTranscribe: true }) }));
     const call = as(() => C.getCallScoped(id));
     assert.equal(call.status, 'failed');
     assert.match(call.error, /Transcription failed \(400\)/);
+    // Kept so it can be retried.
+    assert.equal(fs.existsSync(path.join(UPLOAD_DIR, audio)), true);
   } finally {
     delete process.env.OPENAI_API_KEY;
   }

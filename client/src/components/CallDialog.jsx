@@ -292,7 +292,30 @@ function Recorder({ onReady, onRecordingChange, channel }) {
   )
 }
 
-export default function CallDialog({ open, candidate, onClose, onSaved }) {
+const CONSENT_METHOD = { link: 'consent link', apply_page: 'apply page', verbal: 'on a call' }
+const consentText = (rc) => `${new Date(rc.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${CONSENT_METHOD[rc.method] ?? rc.method}`
+
+function RecordingLocked({ onTypeNotes }) {
+  return (
+    <div className="recording-locked">
+      <span className="recording-locked-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="5" y="11" width="14" height="9" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </svg>
+      </span>
+      <div>
+        <strong>Recording is locked until the candidate agrees.</strong>
+        <p className="muted small">Tick the box above once they say yes on the call, or write your notes instead.</p>
+      </div>
+      <button type="button" className="btn btn-small" onClick={onTypeNotes}>
+        Type notes instead
+      </button>
+    </div>
+  )
+}
+
+export default function CallDialog({ open, candidate, onClose, onSaved, onAskConsent }) {
   const toast = useToast()
   const [tab, setTab] = useState('record')
   const [channel, setChannel] = useState('phone')
@@ -303,12 +326,14 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [recorderKey, setRecorderKey] = useState(0)
+  const [verbalConsent, setVerbalConsent] = useState(false)
 
   useEffect(() => {
     if (open) {
       setTab('record')
       setChannel(candidate?.contact?.preference === 'whatsapp' ? 'whatsapp' : 'phone')
       setAudio(null)
+      setVerbalConsent(false)
       setNotes('')
       setAppId('')
       setError('')
@@ -330,6 +355,7 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
 
   async function save(e) {
     e.preventDefault()
+    if (tab !== 'type' && !canRecord) return setError('Confirm the candidate agreed to recording first, or type notes instead.')
     if (tab !== 'type' && !audio) return setError(tab === 'record' ? 'Record the call first, then press Save.' : 'Choose the recording file first.')
     if (tab === 'type' && !notes.trim()) return setError('Type a few notes about the call first.')
     setBusy(true)
@@ -341,6 +367,7 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
         form.append('method', tab === 'record' ? 'recorded' : 'uploaded')
       }
       form.append('channel', channel)
+      if (audio && tab !== 'type') form.append('consent_basis', consentOnFile ? 'prior' : 'verbal')
       if (notes.trim()) form.append('notes', notes.trim())
       if (appId) form.append('application_id', appId)
       const call = await api.logCall(candidate.id, form)
@@ -358,6 +385,10 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
 
   const apps = candidate?.applications || []
   const number = intlNumber(candidate?.phone)
+  const rc = candidate?.recording_consent
+  const consentOnFile = rc?.status === 'granted'
+  const canRecord = consentOnFile || verbalConsent
+  const first = candidate?.name?.split(' ')[0] || 'The candidate'
 
   return (
     <Modal open={open} title={`Add call details: ${candidate?.name || ''}`} onClose={close} wide>
@@ -396,6 +427,37 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
             </span>
           </div>
         )}
+        {consentOnFile ? (
+          <div className="consent-gate ok">
+            <strong>Recording allowed.</strong> {first} agreed to call recording ({consentText(rc)}).
+          </div>
+        ) : (
+          <div className={`consent-gate ${rc?.status === 'refused' || rc?.status === 'withdrawn' ? 'no' : 'ask'}`}>
+            <p>
+              <strong>
+                {rc?.status === 'refused' || rc?.status === 'withdrawn'
+                  ? `${first} said no to call recording.`
+                  : rc?.status === 'requested'
+                    ? `${first} hasn't answered the recording question yet.`
+                    : `${first} hasn't agreed to call recording yet.`}
+              </strong>{' '}
+              To record this call, ask at the start and read this out:
+            </p>
+            <blockquote className="consent-script">
+              "Before we start: this call is recorded so our system can note details like your salary and notice period. The
+              recording is deleted once the notes are written. Is that okay with you?"
+            </blockquote>
+            <label className="consent-tick">
+              <input type="checkbox" checked={verbalConsent} onChange={(e) => setVerbalConsent(e.target.checked)} disabled={recording} />
+              <span>{first} said yes to this call being recorded</span>
+            </label>
+            {onAskConsent && (
+              <button type="button" className="link-btn" onClick={onAskConsent}>
+                Or send them a consent link first
+              </button>
+            )}
+          </div>
+        )}
         <div className="tabs" role="tablist">
           {TABS.map(([key, label]) => (
             <button
@@ -412,9 +474,10 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
           ))}
         </div>
 
-        {tab === 'record' && <Recorder key={recorderKey} channel={channel} onReady={setAudio} onRecordingChange={setRecording} />}
+        {tab !== 'type' && !canRecord && <RecordingLocked onTypeNotes={() => switchTab('type')} />}
+        {tab === 'record' && canRecord && <Recorder key={recorderKey} channel={channel} onReady={setAudio} onRecordingChange={setRecording} />}
 
-        {tab === 'upload' && (
+        {tab === 'upload' && canRecord && (
           <AudioPicker file={audio} onPick={setAudio} onError={setError} channel={channel} onUseRecorder={() => switchTab('record')} />
         )}
 

@@ -135,6 +135,17 @@ function CallItem({ call, onChanged }) {
           <p className="pre">{call.notes}</p>
         </div>
       )}
+      {call.method !== 'typed' && (
+        <div className="call-consent">
+          {call.consent_basis && (
+            <span className="cc-tag">{call.consent_basis === 'prior' ? 'Consent on file' : 'Consent given on the call'}</span>
+          )}
+          {call.consent_heard === 'agreed' && <span className="cc-tag ok">✓ Consent heard on the recording</span>}
+          {call.consent_heard === 'refused' && <span className="cc-tag warn">⚠ Candidate refused recording on the call</span>}
+          {call.consent_heard === 'not_discussed' && <span className="cc-tag warn">⚠ Consent not heard on the recording</span>}
+          {call.audio_deleted_at && <span className="cc-tag">Recording deleted after notes were taken</span>}
+        </div>
+      )}
       {call.has_audio && <audio controls preload="none" src={api.callAudioUrl(call.id)} className="audio" />}
       {call.transcript && (
         <details className="call-transcript">

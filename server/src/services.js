@@ -1,4 +1,5 @@
 // Write-side business logic shared by the API routes and the seed script.
+import { consentSummary } from './consent.js';
 import { db, tx, now, parseList, toCandidate, toJob, HttpError, DEFAULT_ROUNDS, FIXED_STAGES, roundsOf, stagesFor, newApplyToken } from './db.js';
 import { normalizeSkills } from './skills.js';
 import { scoreMatch } from './matching.js';
@@ -73,6 +74,7 @@ export function getCandidateDetail(id) {
     resume_filename: row.resume_filename,
     profile: parseProfile(row.profile),
     parsed_by: row.parsed_by ?? 'rules',
+    recording_consent: consentSummary(id),
     contact: {
       preference: row.contact_preference ?? null,
       consent_at: row.contact_consent_at ?? null,

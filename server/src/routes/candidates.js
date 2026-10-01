@@ -10,6 +10,7 @@ import { upsertCandidate, addApplication, addNote, getCandidateDetail, getJob, u
 import { toCsv } from '../csv.js';
 import { rateLimit } from '../ratelimit.js';
 import { createCall, getCallScoped, processCall, toCall } from '../calls.js';
+import { createConsentLink, recordConsent } from '../consent.js';
 import { runAs } from '../context.js';
 import { idParam } from './util.js';
 import { workspaceId, bindContext } from '../context.js';
@@ -144,21 +145,31 @@ const audioUpload = multer({
     cb(ok ? null : new HttpError(400, 'Please choose an audio recording (mp3, m4a, wav, amr, 3gp, ogg or webm)'), ok);
   },
 });
+const consentLimit = rateLimit({ name: 'consent-link', max: 30, windowSec: 60 * 60, key: (req) => req.user?.id ?? req.ip });
 const callLimit = rateLimit({ name: 'call', max: 20, windowSec: 60, key: (req) => req.user?.id ?? req.ip });
 
-// POST /api/candidates/:id/calls  multipart: audio? (file), method (recorded|uploaded|typed), channel (phone|whatsapp), notes?, application_id?
+// POST /api/candidates/:id/calls  multipart: audio? (file), method (recorded|uploaded|typed), channel (phone|whatsapp),
+//   consent_basis (prior|verbal, required with audio), notes?, application_id?
 router.post('/:id/calls', callLimit, audioUpload.single('audio'), bindContext, (req, res) => {
   const method = req.file ? (req.body?.method === 'recorded' ? 'recorded' : 'uploaded') : 'typed';
-  const id = createCall({
-    candidateId: idParam(req),
-    applicationId: req.body?.application_id ? Number(req.body.application_id) : null,
-    method,
-    channel: req.body?.channel,
-    audioFile: req.file?.filename,
-    audioName: req.file ? (method === 'recorded' ? 'Live recording' : req.file.originalname) : null,
-    notes: req.body?.notes,
-    recordedBy: req.user?.name,
-  });
+  let id;
+  try {
+    id = createCall({
+      candidateId: idParam(req),
+      applicationId: req.body?.application_id ? Number(req.body.application_id) : null,
+      method,
+      channel: req.body?.channel,
+      consentBasis: req.body?.consent_basis,
+      audioFile: req.file?.filename,
+      audioName: req.file ? (method === 'recorded' ? 'Live recording' : req.file.originalname) : null,
+      notes: req.body?.notes,
+      recordedBy: req.user?.name,
+    });
+  } catch (err) {
+    // Refused (e.g. no recording consent): don't keep the uploaded audio around.
+    if (req.file) fs.rmSync(path.join(UPLOAD_DIR, path.basename(req.file.filename)), { force: true });
+    throw err;
+  }
   const call = getCallScoped(id);
   if (call.status === 'processing') {
     const ctx = req.ctx;
@@ -166,6 +177,18 @@ router.post('/:id/calls', callLimit, audioUpload.single('audio'), bindContext, (
   }
   const { audio_file, ...safe } = call;
   res.status(202).json(toCall(safe));
+});
+
+// POST /api/candidates/:id/consent-link  -> one-time link the recruiter sends to ask for call-recording consent
+router.post('/:id/consent-link', consentLimit, (req, res) => {
+  res.status(201).json(createConsentLink(idParam(req)));
+});
+
+// POST /api/candidates/:id/consent  { status: granted|refused }  -> the candidate answered on a call
+router.post('/:id/consent', (req, res) => {
+  const id = idParam(req);
+  if (!getCandidateDetail(id)) throw new HttpError(404, 'Candidate not found');
+  res.status(201).json(recordConsent(id, { status: req.body?.status, method: 'verbal', recordedBy: req.user?.name }));
 });
 
 export default router;

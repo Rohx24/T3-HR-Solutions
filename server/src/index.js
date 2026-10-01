@@ -15,7 +15,7 @@ import workspace from './routes/workspace.js';
 import interviews from './routes/interviews.js';
 import calls from './routes/calls.js';
 import publicRoutes from './routes/public.js';
-import { failStaleCalls } from './calls.js';
+import { failStaleCalls, purgeOldRecordings } from './calls.js';
 import { requireAuth } from './auth.js';
 import { connectRedis, disconnectRedis, redisStatus } from './redis.js';
 import { apiCache } from './cache.js';
@@ -31,6 +31,15 @@ connectRedis();
 
 await seedIfEmpty();
 failStaleCalls();
+// Recordings older than the retention period are deleted even if they were never transcribed.
+purgeOldRecordings();
+setInterval(() => {
+  try {
+    purgeOldRecordings();
+  } catch (err) {
+    console.error('Recording purge failed:', err.message);
+  }
+}, 60 * 60 * 1000).unref();
 
 const app = express();
 app.disable('x-powered-by');

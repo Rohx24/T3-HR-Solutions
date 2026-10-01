@@ -42,3 +42,34 @@
   .apply-form { order: 1; }
   .apply-hero { padding: 28px 0 30px; }
 }
+
+/* ---------- call-recording consent page + privacy notice ---------- */
+.consent-main { padding-top: 32px; }
+.consent-card { display: flex; flex-direction: column; gap: 14px; border-top: 3px solid var(--blue); box-shadow: var(--shadow-md); animation: riseIn 0.5s var(--e-out) backwards; }
+.consent-card h1 { font-size: clamp(22px, 3.4vw, 28px); letter-spacing: -0.015em; line-height: 1.2; }
+.consent-card .kicker { margin-bottom: 0; }
+.consent-lead { color: var(--text-2); }
+.notice { margin: 0; border-top: 1px solid var(--line); }
+.notice-row { display: grid; grid-template-columns: 150px 1fr; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.notice dt { font-weight: 700; font-size: 13.5px; }
+.notice dd { margin: 0; color: var(--text-2); font-size: 14px; }
+.consent-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.consent-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 54px; padding: 0 16px;
+  border: 1px solid var(--line-strong); background: var(--surface); font-weight: 700; font-size: 15px; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s, box-shadow 0.25s var(--e-std), transform 0.15s var(--e-std);
+}
+.consent-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.consent-btn:hover:not(:disabled) { box-shadow: var(--shadow-sm); }
+.consent-btn:active:not(:disabled) { transform: scale(0.99); }
+.consent-btn:disabled { opacity: 0.6; cursor: wait; }
+.consent-btn.yes { color: var(--hired); }
+.consent-btn.yes:hover:not(:disabled) { border-color: var(--hired); background: var(--hired-bg); }
+.consent-btn.no { color: var(--rejected); }
+.consent-btn.no:hover:not(:disabled) { border-color: var(--rejected); background: var(--rejected-bg); }
+.consent-done.no .apply-check { background: var(--navy-3); }
+
+@media (max-width: 520px) {
+  .notice-row { grid-template-columns: 1fr; gap: 2px; }
+  .consent-actions { grid-template-columns: 1fr; }
+}

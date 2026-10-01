@@ -57,6 +57,8 @@ export const api = {
   updateCandidate: (id, data) => request(`/candidates/${id}`, json('PATCH', data)),
   logCall: (candidateId, form) => request(`/candidates/${candidateId}/calls`, { method: 'POST', body: form }),
   retryCall: (id) => request(`/calls/${id}/retry`, { method: 'POST' }),
+  createConsentLink: (candidateId) => request(`/candidates/${candidateId}/consent-link`, json('POST', {})),
+  recordConsent: (candidateId, status) => request(`/candidates/${candidateId}/consent`, json('POST', { status })),
   callAudioUrl: (id) => `/api/calls/${id}/audio`,
   feedbackLink: (interviewId) => request(`/interviews/${interviewId}/feedback-link`, { method: 'POST' }),
 
