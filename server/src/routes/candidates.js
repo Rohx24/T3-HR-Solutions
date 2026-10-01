@@ -6,6 +6,7 @@ import multer from 'multer';
 import { db, toCandidate, UPLOAD_DIR, HttpError } from '../db.js';
 import { extractText, parseResume, ALLOWED_EXTENSIONS } from '../parser.js';
 import { upsertCandidate, addApplication, addNote, getCandidateDetail, getJob } from '../services.js';
+import { toCsv } from '../csv.js';
 import { idParam } from './util.js';
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -21,13 +22,13 @@ const upload = multer({
 
 const router = Router();
 
-// GET /api/candidates?q=&skill=&role=
-router.get('/', (req, res) => {
-  const q = req.query.q?.trim() || null;
-  const skill = req.query.skill?.trim() || null;
-  const role = req.query.role?.trim() || null;
+// Shared by the list and the CSV export so both honour the same ?q=&skill=&role= filters.
+function searchCandidates(query) {
+  const q = query.q?.trim() || null;
+  const skill = query.skill?.trim() || null;
+  const role = query.role?.trim() || null;
 
-  const rows = db.prepare(`
+  return db.prepare(`
     SELECT c.*, (SELECT COUNT(*) FROM applications a WHERE a.candidate_id = c.id) AS application_count
     FROM candidates c
     WHERE ($q IS NULL OR c.name LIKE $like OR c.email LIKE $like OR c.primary_role LIKE $like
@@ -35,9 +36,24 @@ router.get('/', (req, res) => {
       AND ($role IS NULL OR c.primary_role = $role)
       AND ($skill IS NULL OR c.skills LIKE $skillLike)
     ORDER BY c.last_applied_at DESC
-  `).all({ q, like: `%${q}%`, role, skill, skillLike: `%"${skill}"%` });
+  `).all({ q, like: `%${q}%`, role, skill, skillLike: `%"${skill}"%` }).map(toCandidate);
+}
 
-  res.json(rows.map(toCandidate));
+// GET /api/candidates?q=&skill=&role=
+router.get('/', (req, res) => {
+  res.json(searchCandidates(req.query));
+});
+
+// GET /api/candidates/export.csv?q=&skill=&role=  (download the filtered talent pool for clients/spreadsheets)
+router.get('/export.csv', (req, res) => {
+  const csv = toCsv(searchCandidates(req.query));
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.set({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': `attachment; filename="talent-pool-${stamp}.csv"`,
+  });
+  // BOM so Excel opens UTF-8 names correctly.
+  res.send(`﻿${csv}`);
 });
 
 // POST /api/candidates/upload  (multipart: resume, job_id?)
