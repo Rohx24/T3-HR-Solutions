@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks.js'
-import { STAGES, stageSlug, timeAgo } from '../utils.js'
+import { stageSlug, timeAgo } from '../utils.js'
+import { formatWhen } from '../components/ScheduleDialog.jsx'
 import { PageState } from '../components/ui.jsx'
 import { CountUp, LineReveal, RiseWords } from '../components/TextFx.jsx'
 import { firstName, useAuth } from '../auth.jsx'
@@ -16,6 +17,8 @@ const EVENT_ICONS = {
   application: '⇢',
   applied: '⇢',
 }
+
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 function greeting() {
   const h = new Date().getHours()
@@ -48,10 +51,10 @@ export default function Dashboard() {
   const { data, error, loading, reload } = useApi(() => api.stats(), [])
   if (!data) return <PageState loading={loading} error={error} onRetry={reload} />
 
-  const { totals = {}, funnel = [], top_skills = [], roles = [], recent_events = [] } = data
+  const { totals = {}, funnel = [], top_skills = [], roles = [], recent_events = [], upcoming_interviews = [] } = data
   if (!totals.candidates && !totals.open_jobs) return <Welcome user={user} />
   const counts = Object.fromEntries(funnel.map((f) => [f.stage, f.count]))
-  const stages = [...STAGES, ...funnel.map((f) => f.stage).filter((s) => !STAGES.includes(s))]
+  const stages = funnel.map((f) => f.stage)
   const maxFunnel = Math.max(1, ...funnel.map((f) => f.count))
   const maxSkill = Math.max(1, ...top_skills.map((s) => s.count))
   const maxRole = Math.max(1, ...roles.map((r) => r.count))
@@ -69,7 +72,7 @@ export default function Dashboard() {
           delay={350}
           text={
             totals.candidates
-              ? `You have ${totals.candidates} candidates in your pool and ${totals.active_applications} applications in progress.`
+              ? `You have ${plural(totals.candidates, 'candidate')} and ${plural(totals.active_applications, 'person', 'people')} being interviewed right now.`
               : 'Your workspace is empty. Upload a first resume or press Guide me to see how it works.'
           }
         />
@@ -93,6 +96,30 @@ export default function Dashboard() {
         <StatCard i={2} label="Open jobs" value={totals.open_jobs} hint="Jobs you are hiring for" to="/jobs" />
         <StatCard i={3} label="In progress" value={totals.active_applications} hint={`Still being interviewed · ${totals.hired ?? 0} hired`} />
       </div>
+
+      <section className="card upcoming rise" style={{ '--i': 4 }}>
+        <h2 className="card-title">Upcoming interviews</h2>
+        {upcoming_interviews.length ? (
+          <ul className="up-list">
+            {upcoming_interviews.map((iv) => (
+              <li key={iv.id}>
+                <span className="up-when">{formatWhen(iv.scheduled_at)}</span>
+                <span className="up-what">
+                  <Link className="link strong" to={`/candidates/${iv.candidate_id}`}>
+                    {iv.candidate_name}
+                  </Link>{' '}
+                  <span className="muted">
+                    · {iv.round} · {iv.job_title}
+                  </span>
+                </span>
+                <span className="muted small">{[iv.interviewer, iv.location].filter(Boolean).join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No interviews scheduled. Open a candidate or a job and press Schedule to add one.</p>
+        )}
+      </section>
 
       <div className="dash-grid">
         <section className="card rise" style={{ '--i': 4 }} data-tour="funnel">

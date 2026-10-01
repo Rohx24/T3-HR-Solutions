@@ -6,6 +6,7 @@ import { STAGES, parseSkills, stageSlug, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
 import { Modal, PageHeader, PageState, SkillChips } from '../components/ui.jsx'
 import HelpBox from '../components/HelpBox.jsx'
+import RoundsEditor, { DEFAULT_ROUNDS, cleanRounds } from '../components/RoundsEditor.jsx'
 
 const NEW_COMPANY = '__new'
 
@@ -80,7 +81,7 @@ function JobCard({ job }) {
       <SkillChips skills={job.required_skills} max={6} />
       <div className="stage-strip" aria-label="Candidates per stage">
         {total > 0 ? (
-          STAGES.filter((s) => counts[s]).map((s) => (
+          (job.stages || STAGES).filter((s) => counts[s]).map((s) => (
             <span
               key={s}
               className={`stage-seg stage-fill-${stageSlug(s)}`}
@@ -93,7 +94,7 @@ function JobCard({ job }) {
         )}
       </div>
       <div className="stage-counts">
-        {STAGES.filter((s) => counts[s]).map((s) => (
+        {(job.stages || STAGES).filter((s) => counts[s]).map((s) => (
           <span key={s} className="stage-count">
             <i className={`dot stage-fill-${stageSlug(s)}`} />
             {s} {counts[s]}
@@ -120,6 +121,7 @@ function NewJobForm({ onCancel, onCreated }) {
   const [title, setTitle] = useState('')
   const [skillsText, setSkillsText] = useState('')
   const [description, setDescription] = useState('')
+  const [rounds, setRounds] = useState(DEFAULT_ROUNDS)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -137,6 +139,7 @@ function NewJobForm({ onCancel, onCreated }) {
     if (isNew && !companyName.trim()) return setError('Enter the company name.')
     if (!title.trim()) return setError('Enter a job title.')
     if (!skills.length) return setError('Add at least one required skill.')
+    if (!cleanRounds(rounds).length) return setError('Add at least one interview round.')
     setBusy(true)
     setError('')
     try {
@@ -150,6 +153,7 @@ function NewJobForm({ onCancel, onCreated }) {
         title: title.trim(),
         required_skills: skills,
         description: description.trim(),
+        rounds: cleanRounds(rounds),
       })
       toast.success('Job created', {
         message: `${job.title} is open. Check the suggested candidates.`,
@@ -213,6 +217,11 @@ function NewJobForm({ onCancel, onCreated }) {
           ))}
         </div>
       )}
+      <div className="field">
+        <span>Interview rounds for this job</span>
+        <span className="muted small">Candidates move through these in order. Use one round or as many as the client needs.</span>
+        <RoundsEditor rounds={rounds} onChange={setRounds} />
+      </div>
       <label className="field">
         <span>Description</span>
         <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Team, scope, location…" />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
-import { STAGES } from '../utils.js'
+import { DEFAULT_ROUNDS } from './RoundsEditor.jsx'
 import { useToast } from './Toast.jsx'
 import { StarInput } from './ui.jsx'
 import { useAuth } from '../auth.jsx'
@@ -10,7 +10,7 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
   const { user } = useAuth()
   const first = applications[0]
   const [appId, setAppId] = useState(first ? String(first.id) : '')
-  const [round, setRound] = useState(first && first.stage !== 'Applied' ? first.stage : 'Screening')
+  const [round, setRound] = useState(first && first.stage !== 'Applied' ? first.stage : first?.rounds?.[0] || 'Screening')
   const [rating, setRating] = useState(0)
   // Defaults to the signed-in user; editable when noting feedback on behalf of a panel member.
   const [author, setAuthor] = useState(user?.name || '')
@@ -23,10 +23,14 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
     if (appId && !applications.some((a) => String(a.id) === appId)) setAppId('')
   }, [applications, appId])
 
+  const selectedApp = applications.find((a) => String(a.id) === appId)
+  const roundOptions = [...(selectedApp?.rounds || DEFAULT_ROUNDS), 'Offer']
+  if (round && !roundOptions.includes(round)) roundOptions.unshift(round)
+
   function chooseApp(value) {
     setAppId(value)
     const app = applications.find((a) => String(a.id) === value)
-    if (app && app.stage !== 'Applied') setRound(app.stage)
+    if (app) setRound(app.stage !== 'Applied' ? app.stage : app.rounds?.[0] || 'Screening')
   }
 
   async function submit(e) {
@@ -71,7 +75,7 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
         <label className="field">
           <span>Which interview step?</span>
           <select value={round} onChange={(e) => setRound(e.target.value)}>
-            {STAGES.filter((s) => s !== 'Applied').map((s) => (
+            {roundOptions.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>

@@ -213,7 +213,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .badge-open { background: var(--hired-bg); color: var(--hired); }
 .badge-closed { background: var(--applied-bg); color: var(--applied); }
 
-.match { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: var(--r); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.match { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; white-space: nowrap; flex-shrink: 0; border-radius: var(--r); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .match-high { background: var(--blue); color: #fff; }
 .match-mid { background: var(--blue-soft); color: var(--blue-700); }
 .match-low { background: var(--applied-bg); color: var(--applied); }
@@ -511,3 +511,46 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .helpbox { grid-template-columns: auto 1fr; }
   .helpbox-close { grid-column: 1 / -1; justify-self: start; }
 }
+
+/* ---------- custom rounds ---------- */
+.stage-round { background: #e6ecfb; color: #2a4aa3; }
+.stage-fill-round { background: #5b7be0; }
+.stage-border-round { border-top-color: #5b7be0; }
+.stage-fill-interviewing { background: #6d4fd8; }
+.rounds-editor { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.rounds-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rounds-list { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.round-row { display: flex; gap: 6px; align-items: center; }
+.round-row input { flex: 1; height: 38px; }
+.round-n { width: 26px; height: 26px; display: grid; place-items: center; background: var(--blue); color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.round-fixed { font-size: 13px; color: var(--text-2); background: var(--subtle); border: 1px dashed var(--line-strong); padding: 8px 10px; }
+.icon-sq { width: 34px; height: 38px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; font-weight: 700; color: var(--text-2); }
+.icon-sq:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.icon-sq.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.icon-sq:disabled { opacity: 0.35; cursor: not-allowed; }
+.rounds-inline { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-weight: 600; color: var(--text-2); }
+
+/* ---------- interviews ---------- */
+.card-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.iv-chip { align-self: flex-start; font-size: 11.5px; font-weight: 700; color: var(--blue-700); background: var(--blue-soft); padding: 3px 7px; }
+.iv-chip.done { color: var(--hired); background: var(--hired-bg); }
+.iv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.iv-item { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.iv-item:first-child { padding-top: 0; }
+.iv-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.iv-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.iv-title { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.iv-status { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; }
+.iv-status-scheduled { background: var(--blue-soft); color: var(--blue-700); }
+.iv-status-completed { background: var(--hired-bg); color: var(--hired); }
+.iv-status-cancelled { background: var(--applied-bg); color: var(--applied); }
+.iv-cancelled .iv-main { opacity: 0.6; }
+.iv-done { color: var(--hired); font-weight: 600; }
+.iv-actions { display: flex; gap: 6px; }
+.upcoming { margin-bottom: 24px; }
+.up-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.up-list li { display: grid; grid-template-columns: 170px 1fr auto; gap: 14px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.up-list li:first-child { padding-top: 0; }
+.up-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.up-when { font-weight: 700; color: var(--blue-700); white-space: nowrap; }
+@media (max-width: 760px) { .up-list li { grid-template-columns: 1fr; gap: 2px; } }

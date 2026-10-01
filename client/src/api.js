@@ -59,6 +59,10 @@ export const api = {
   jobs: () => request('/jobs'),
   job: (id) => request(`/jobs/${id}`),
   createJob: (data) => request('/jobs', json('POST', data)),
+  updateJob: (id, data) => request(`/jobs/${id}`, json('PATCH', data)),
+  interviews: (params) => request(`/interviews${query(params)}`),
+  scheduleInterview: (data) => request('/interviews', json('POST', data)),
+  updateInterview: (id, data) => request(`/interviews/${id}`, json('PATCH', data)),
   matches: (jobId) => request(`/jobs/${jobId}/matches`),
 
   createApplication: (data) => request('/applications', json('POST', data)),

@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast.jsx'
 import NoteForm from '../components/NoteForm.jsx'
 import ProfileDetails from '../components/ProfileDetails.jsx'
 import HelpBox from '../components/HelpBox.jsx'
+import ScheduleDialog, { InterviewItem } from '../components/ScheduleDialog.jsx'
 import { useAuth } from '../auth.jsx'
 import {
   MatchScore,
@@ -27,6 +28,7 @@ export default function CandidateDetail() {
   const jobs = useApi(() => api.jobs(), [])
   const [addJobId, setAddJobId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [scheduling, setScheduling] = useState(null)
 
   const c = candidate.data
   if (!c) return <PageState loading={candidate.loading} error={candidate.error} onRetry={candidate.reload} />
@@ -147,7 +149,12 @@ export default function CandidateDetail() {
                       </div>
                     </div>
                     <MatchScore score={a.match_score} />
-                    <StageSelect value={a.stage} onChange={(s) => changeStage(a, s)} />
+                    <StageSelect value={a.stage} stages={a.stages} onChange={(s) => changeStage(a, s)} />
+                    {!['Hired', 'Rejected'].includes(a.stage) && (
+                      <button className="btn btn-small" onClick={() => setScheduling(a)}>
+                        Schedule interview
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -182,6 +189,21 @@ export default function CandidateDetail() {
               <pre>{c.resume_text || 'No resume text stored.'}</pre>
             </details>
           </section>
+          <section className="card">
+            <h2 className="card-title">Interviews</h2>
+            {(c.interviews || []).length ? (
+              <ul className="iv-list">
+                {c.interviews.map((iv) => (
+                  <InterviewItem key={iv.id} iv={iv} onChanged={() => candidate.reload()} />
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">
+                No interviews yet. Use <strong>Schedule interview</strong> next to a job above to set a date and time.
+              </p>
+            )}
+          </section>
+
           <section className="card" data-tour="note-form">
             <h2 className="card-title">Write interview feedback</h2>
             <NoteForm candidateId={c.id} applications={applications} onSaved={() => candidate.reload()} />
@@ -222,6 +244,12 @@ export default function CandidateDetail() {
           </section>
         </div>
       </div>
+      <ScheduleDialog
+        application={scheduling}
+        title={scheduling ? `Schedule an interview: ${scheduling.job_title}` : ''}
+        onClose={() => setScheduling(null)}
+        onSaved={() => candidate.reload()}
+      />
     </>
   )
 }

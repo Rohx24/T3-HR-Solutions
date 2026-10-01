@@ -1,6 +1,11 @@
 export const STAGES = ['Applied', 'Screening', 'Technical', 'HR Round', 'Offer', 'Hired', 'Rejected']
 
-export const stageSlug = (stage = '') => stage.toLowerCase().replace(/\s+/g, '-')
+// Built-in stages have their own colour; a job's custom round names share the "round" colour.
+const STAGE_SLUGS = {
+  Applied: 'applied', Screening: 'screening', Technical: 'technical', 'HR Round': 'hr-round',
+  Offer: 'offer', Hired: 'hired', Rejected: 'rejected', Interviewing: 'interviewing',
+}
+export const stageSlug = (stage = '') => STAGE_SLUGS[stage] || 'round'
 
 export function timeAgo(iso) {
   if (!iso) return '-'

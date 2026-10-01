@@ -76,3 +76,4 @@ export const STAGE_HELP = {
   Hired: 'Accepted and joined.',
   Rejected: 'Not selected this time.',
 }
+export const stageHelp = (stage) => STAGE_HELP[stage] || 'Interview round for this job.'

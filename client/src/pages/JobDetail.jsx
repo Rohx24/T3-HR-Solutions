@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks.js'
-import { STAGES, formatYears, stageSlug, timeAgo } from '../utils.js'
+import { formatYears, stageSlug, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
-import { MatchScore, PageHeader, PageState, ReturningBadge, SkillChips, StageSelect } from '../components/ui.jsx'
-import HelpBox, { STAGE_HELP } from '../components/HelpBox.jsx'
+import { MatchScore, Modal, PageHeader, PageState, ReturningBadge, SkillChips, StageSelect } from '../components/ui.jsx'
+import RoundsEditor, { cleanRounds } from '../components/RoundsEditor.jsx'
+import ScheduleDialog, { formatWhen } from '../components/ScheduleDialog.jsx'
+import HelpBox, { stageHelp } from '../components/HelpBox.jsx'
 
 export default function JobDetail() {
   const { id } = useParams()
@@ -16,12 +18,16 @@ export default function JobDetail() {
   const [dragId, setDragId] = useState(null)
   const [overStage, setOverStage] = useState(null)
   const [adding, setAdding] = useState(null)
+  const [scheduling, setScheduling] = useState(null)
+  const [editRounds, setEditRounds] = useState(null)
+  const [roundsError, setRoundsError] = useState('')
 
   const j = job.data
   if (!j) return <PageState loading={job.loading} error={job.error} onRetry={job.reload} />
 
   const applications = (j.applications || []).map((a) => ({ ...a, stage: overrides[a.id] || a.stage }))
-  const byStage = Object.fromEntries(STAGES.map((s) => [s, []]))
+  const stages = j.stages
+  const byStage = Object.fromEntries(stages.map((s) => [s, []]))
   for (const a of applications) (byStage[a.stage] ||= []).push(a)
 
   async function move(app, stage) {
@@ -65,7 +71,7 @@ export default function JobDetail() {
           </Link>
         }
         title={j.title}
-        subtitle={`${j.company_name} · ${j.total ?? applications.length} people in this job · added ${timeAgo(j.created_at)}`}
+        subtitle={`${j.company_name} · ${(n => `${n} ${n === 1 ? 'person' : 'people'}`)(j.total ?? applications.length)} in this job · added ${timeAgo(j.created_at)}`}
       />
 
       <HelpBox
@@ -83,12 +89,21 @@ export default function JobDetail() {
           <p className="label">Skills this job needs</p>
           <SkillChips skills={j.required_skills} />
         </div>
+        <div>
+          <p className="label">Interview rounds</p>
+          <div className="rounds-inline">
+            <span>{['Applied', ...j.rounds, 'Offer', 'Hired'].join('  →  ')}</span>
+            <button className="btn btn-small" onClick={() => (setRoundsError(''), setEditRounds([...j.rounds]))}>
+              Change rounds
+            </button>
+          </div>
+        </div>
         {j.description && <p className="muted">{j.description}</p>}
       </section>
 
       <div className="pipeline-layout">
         <div className="kanban" aria-label="Pipeline" data-tour="kanban">
-          {STAGES.map((stage) => (
+          {stages.map((stage) => (
             <div
               key={stage}
               className={`kanban-col ${overStage === stage ? 'drop-target' : ''}`}
@@ -105,9 +120,9 @@ export default function JobDetail() {
               }}
             >
               <div className={`kanban-head stage-border-${stageSlug(stage)}`}>
-                <span className="stage-name" title={STAGE_HELP[stage]}>
+                <span className="stage-name" title={stageHelp(stage)}>
                   {stage}
-                  <small>{STAGE_HELP[stage]}</small>
+                  <small>{stageHelp(stage)}</small>
                 </span>
                 <span className="count">{byStage[stage].length}</span>
               </div>
@@ -133,7 +148,18 @@ export default function JobDetail() {
                       {a.candidate.primary_role || 'Role n/a'} · {formatYears(a.candidate.years_experience)}{' '}
                       <ReturningBadge times={a.candidate.times_applied} />
                     </div>
-                    <StageSelect value={a.stage} onChange={(s) => move(a, s)} />
+                    <NextInterview interviews={a.interviews} />
+                    <div className="card-actions">
+                      <StageSelect value={a.stage} stages={stages} onChange={(s) => move(a, s)} />
+                      {!['Hired', 'Rejected'].includes(a.stage) && (
+                        <button
+                          className="btn btn-small"
+                          onClick={() => setScheduling({ id: a.id, stage: a.stage, rounds: j.rounds, name: a.candidate.name })}
+                        >
+                          Schedule
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {byStage[stage].length === 0 && <div className="kanban-empty">Drag a card here</div>}
@@ -177,6 +203,57 @@ export default function JobDetail() {
           )}
         </aside>
       </div>
+      <ScheduleDialog
+        application={scheduling}
+        title={scheduling ? `Schedule an interview with ${scheduling.name}` : ''}
+        onClose={() => setScheduling(null)}
+        onSaved={() => job.reload()}
+      />
+
+      <Modal open={Boolean(editRounds)} title="Change interview rounds" onClose={() => setEditRounds(null)}>
+        {editRounds && (
+          <form
+            className="form"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              setRoundsError('')
+              try {
+                await api.updateJob(j.id, { rounds: cleanRounds(editRounds) })
+                toast.success('Interview rounds updated')
+                setEditRounds(null)
+                job.reload()
+              } catch (err) {
+                setRoundsError(err.message)
+              }
+            }}
+          >
+            <RoundsEditor rounds={editRounds} onChange={setEditRounds} />
+            {roundsError && <p className="form-error">{roundsError}</p>}
+            <div className="form-actions">
+              <button type="button" className="btn" onClick={() => setEditRounds(null)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary">Save rounds</button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </>
   )
+}
+
+// The next scheduled interview on a board card, or the last finished one.
+function NextInterview({ interviews = [] }) {
+  const upcoming = interviews
+    .filter((i) => i.status === 'scheduled')
+    .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))[0]
+  if (upcoming) {
+    return (
+      <span className="iv-chip" title={upcoming.location || ''}>
+        {upcoming.round}: {formatWhen(upcoming.scheduled_at)}
+      </span>
+    )
+  }
+  const done = interviews.filter((i) => i.status === 'completed').sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0]
+  return done ? <span className="iv-chip done">✓ {done.round} finished</span> : null
 }
