@@ -21,6 +21,13 @@ if ! command -v docker >/dev/null 2>&1; then
   sudo systemctl enable --now docker
 fi
 
+# Free-tier instances (1 GB RAM) can run out of memory during the client build; add 2 GB swap once.
+if [ "$(free -m | awk '/^Mem:/ {print $2}')" -lt 2000 ] && ! swapon --show | grep -q /swapfile; then
+  echo "==> Adding 2 GB swap"
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+
 if [ -d "$APP_DIR/.git" ]; then
   echo "==> Pulling latest code"
   git -C "$APP_DIR" pull --ff-only
