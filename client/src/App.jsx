@@ -13,6 +13,7 @@ import JobDetail from './pages/JobDetail.jsx'
 import Landing from './pages/Landing.jsx'
 import { Login, Signup } from './pages/AuthPages.jsx'
 import FeedbackPage from './pages/FeedbackPage.jsx'
+import ApplyPage from './pages/ApplyPage.jsx'
 
 function NotFound() {
   return (
@@ -103,6 +104,14 @@ export default function App() {
   const { status } = useAuth()
   const location = useLocation()
   // The client interviewer's feedback form is public: no sign-in, no app chrome.
+  // The job apply page is public too: candidates apply without an account.
+  if (location.pathname.startsWith('/apply/')) {
+    return (
+      <Routes>
+        <Route path="/apply/:token" element={<ApplyPage />} />
+      </Routes>
+    )
+  }
   if (location.pathname.startsWith('/feedback/')) {
     return (
       <Routes>

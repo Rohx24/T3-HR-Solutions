@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -183,6 +184,12 @@ for (const [table, column, type] of [
   ['notes', 'decision', 'TEXT'], // round result: Passed / Not passed / On hold
   ['notes', 'evaluator_company', 'TEXT'], // which company's interviewer gave the feedback
   ['notes', 'interview_id', 'INTEGER'],
+  ['jobs', 'apply_token', 'TEXT'], // public apply link: /apply/<token>
+  ['candidates', 'contact_consent_at', 'TEXT'], // agreed on the apply page to be contacted about jobs
+  ['candidates', 'whatsapp_opt_in_at', 'TEXT'], // ticked "contact me on WhatsApp" on the apply page
+  ['candidates', 'whatsapp_permission', 'TEXT'], // WhatsApp call permission request: requested | failed
+  ['candidates', 'contact_preference', 'TEXT'], // how they asked to be called: whatsapp | phone
+  ['calls', 'channel', 'TEXT'], // how the recruiter reached them: phone | whatsapp
 ]) {
   const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
   if (!has) {
@@ -192,6 +199,14 @@ for (const [table, column, type] of [
       if (!/duplicate column/i.test(err.message)) throw err; // another replica added it first
     }
   }
+}
+
+// Every job gets an unguessable apply token; backfill jobs created before apply links existed.
+// The IS NULL guard keeps two replicas booting together from overwriting each other's token.
+export const newApplyToken = () => crypto.randomBytes(9).toString('base64url');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_apply_token ON jobs(apply_token)');
+for (const { id } of db.prepare('SELECT id FROM jobs WHERE apply_token IS NULL').all()) {
+  db.prepare('UPDATE jobs SET apply_token = ? WHERE id = ? AND apply_token IS NULL').run(newApplyToken(), id);
 }
 
 export const now = () => new Date().toISOString();
@@ -262,6 +277,7 @@ export const toJob = (r) => {
     status: r.status,
     rounds,
     stages: stagesFor(rounds),
+    apply_token: r.apply_token,
     created_at: r.created_at,
   };
 };

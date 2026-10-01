@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { useToast } from './Toast.jsx'
 import { Modal } from './ui.jsx'
+import { formatBytes } from '../utils.js'
 
 // Add details from a phone call with a candidate, three ways:
 //   1. Record now: the call is on speaker and this device's microphone records it live
@@ -24,6 +25,114 @@ function pickMime() {
 }
 
 const clock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+
+const AUDIO_EXTS = ['.amr', '.3gp', '.m4a', '.mp3', '.wav', '.ogg', '.opus', '.webm', '.aac', '.flac', '.mp4', '.mpeg']
+const MAX_AUDIO_BYTES = 80 * 1024 * 1024
+
+// Drop zone for a call recording, matching the resume upload. Shows the file with a player once chosen.
+function AudioPicker({ file, onPick, onError }) {
+  const inputRef = useRef(null)
+  const [dragging, setDragging] = useState(false)
+  const [url, setUrl] = useState('')
+  const [duration, setDuration] = useState(null)
+  const [playable, setPlayable] = useState(true)
+
+  useEffect(() => {
+    setDuration(null)
+    setPlayable(true)
+    if (!file) return setUrl('')
+    const next = URL.createObjectURL(file)
+    setUrl(next)
+    return () => URL.revokeObjectURL(next)
+  }, [file])
+
+  function pick(f) {
+    if (!f) return
+    const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase()
+    if (!f.type.startsWith('audio/') && !AUDIO_EXTS.includes(ext)) {
+      return onError('That file is not an audio recording. Choose an mp3, m4a, amr, wav or similar file.')
+    }
+    if (f.size > MAX_AUDIO_BYTES) return onError(`That recording is ${formatBytes(f.size)}. The limit is 80 MB (about 3 hours).`)
+    onError('')
+    onPick(f)
+  }
+
+  const browse = () => inputRef.current?.click()
+
+  return (
+    <div className="field">
+      <span>Call recording</span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={`audio/*,${AUDIO_EXTS.join(',')}`}
+        hidden
+        onChange={(e) => {
+          pick(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+      {file ? (
+        <div className="audio-file">
+          <div className="audio-file-head">
+            <span className="audio-file-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            </span>
+            <div className="audio-file-info">
+              <strong>{file.name}</strong>
+              <p className="muted small">
+                {formatBytes(file.size)}
+                {duration != null && ` · ${clock(Math.round(duration))}`}
+              </p>
+            </div>
+            <button type="button" className="btn btn-small" onClick={browse}>
+              Change file
+            </button>
+          </div>
+          {playable ? (
+            <audio
+              controls
+              src={url}
+              className="audio"
+              onLoadedMetadata={(e) => Number.isFinite(e.currentTarget.duration) && setDuration(e.currentTarget.duration)}
+              onError={() => setPlayable(false)}
+            />
+          ) : (
+            <p className="muted small">This browser can't play this format, but it will still be transcribed.</p>
+          )}
+        </div>
+      ) : (
+        <div
+          className={`dropzone ${dragging ? 'dragging' : ''}`}
+          onClick={browse}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragging(false)
+            pick(e.dataTransfer.files?.[0])
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), browse())}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+          </svg>
+          <strong>Click to choose the call recording</strong>
+          <p className="muted small">Or drag it onto this box. Phone recordings (m4a, mp3, amr, 3gp, wav…), up to 80 MB.</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Recorder({ onReady, onRecordingChange }) {
   const [state, setState] = useState('idle') // idle | recording | paused | done
@@ -109,7 +218,7 @@ function Recorder({ onReady, onRecordingChange }) {
       {state === 'idle' && (
         <>
           <ol className="steps-list">
-            <li>Call the candidate from your phone and switch on the <strong>speaker</strong>.</li>
+            <li>Call the candidate from your phone (a normal call or a WhatsApp call) and switch on the <strong>speaker</strong>.</li>
             <li>Keep the phone close to this computer or tablet.</li>
             <li>Tell the candidate the call is being recorded.</li>
             <li>Press <strong>Start recording</strong>. Press <strong>Stop</strong> when the call ends.</li>
@@ -163,6 +272,7 @@ function Recorder({ onReady, onRecordingChange }) {
 export default function CallDialog({ open, candidate, onClose, onSaved }) {
   const toast = useToast()
   const [tab, setTab] = useState('record')
+  const [channel, setChannel] = useState('phone')
   const [audio, setAudio] = useState(null)
   const [notes, setNotes] = useState('')
   const [appId, setAppId] = useState('')
@@ -174,6 +284,7 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
   useEffect(() => {
     if (open) {
       setTab('record')
+      setChannel(candidate?.contact?.preference === 'whatsapp' ? 'whatsapp' : 'phone')
       setAudio(null)
       setNotes('')
       setAppId('')
@@ -206,6 +317,7 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
         form.append('audio', audio)
         form.append('method', tab === 'record' ? 'recorded' : 'uploaded')
       }
+      form.append('channel', channel)
       if (notes.trim()) form.append('notes', notes.trim())
       if (appId) form.append('application_id', appId)
       const call = await api.logCall(candidate.id, form)
@@ -226,6 +338,31 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
   return (
     <Modal open={open} title={`Add call details: ${candidate?.name || ''}`} onClose={close} wide>
       <form className="form" onSubmit={save}>
+        <div className="field">
+          <span>How did you call?</span>
+          <div className="seg" role="radiogroup" aria-label="How did you call?">
+            {[
+              ['phone', 'Phone call'],
+              ['whatsapp', 'WhatsApp call'],
+            ].map(([value, label]) => (
+              <button
+                type="button"
+                key={value}
+                role="radio"
+                aria-checked={channel === value}
+                className={`seg-btn ${channel === value ? 'on chosen' : ''}`}
+                onClick={() => setChannel(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {candidate?.contact?.preference && (
+            <p className="muted small">
+              They asked for a {candidate.contact.preference === 'whatsapp' ? 'WhatsApp call' : 'normal phone call'} when they applied.
+            </p>
+          )}
+        </div>
         <div className="tabs" role="tablist">
           {TABS.map(([key, label]) => (
             <button
@@ -244,17 +381,7 @@ export default function CallDialog({ open, candidate, onClose, onSaved }) {
 
         {tab === 'record' && <Recorder key={recorderKey} onReady={setAudio} onRecordingChange={setRecording} />}
 
-        {tab === 'upload' && (
-          <label className="field">
-            <span>Choose the call recording from your phone or computer</span>
-            <input
-              type="file"
-              accept="audio/*,.amr,.3gp,.m4a,.mp3,.wav,.ogg,.opus,.webm,.aac,.flac"
-              onChange={(e) => setAudio(e.target.files?.[0] || null)}
-            />
-            <span className="muted small">Any common format, up to 80 MB (about 3 hours).</span>
-          </label>
-        )}
+        {tab === 'upload' && <AudioPicker file={audio} onPick={setAudio} onError={setError} />}
 
         <label className="field">
           <span>{tab === 'type' ? 'What did you learn on the call?' : 'Anything to add? (optional)'}</span>

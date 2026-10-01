@@ -1,5 +1,5 @@
 // Write-side business logic shared by the API routes and the seed script.
-import { db, tx, now, parseList, toCandidate, toJob, HttpError, DEFAULT_ROUNDS, FIXED_STAGES, roundsOf, stagesFor } from './db.js';
+import { db, tx, now, parseList, toCandidate, toJob, HttpError, DEFAULT_ROUNDS, FIXED_STAGES, roundsOf, stagesFor, newApplyToken } from './db.js';
 import { normalizeSkills } from './skills.js';
 import { scoreMatch } from './matching.js';
 import { workspaceId, currentUser } from './context.js';
@@ -73,6 +73,12 @@ export function getCandidateDetail(id) {
     resume_filename: row.resume_filename,
     profile: parseProfile(row.profile),
     parsed_by: row.parsed_by ?? 'rules',
+    contact: {
+      preference: row.contact_preference ?? null,
+      consent_at: row.contact_consent_at ?? null,
+      whatsapp_opt_in_at: row.whatsapp_opt_in_at ?? null,
+      whatsapp_permission: row.whatsapp_permission ?? null,
+    },
     applications,
     interviews: listInterviews({ candidateId: id, limit: 100 }),
     calls: listCalls(id),
@@ -262,10 +268,10 @@ export function createJob({ company_id, title, required_skills, description, sta
   if (!['open', 'closed'].includes(status)) throw new HttpError(400, 'status must be open or closed');
 
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, rounds, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO jobs (workspace_id, company_id, title, required_skills, description, status, rounds, apply_token, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(ws, Number(company_id), t, JSON.stringify(normalizeSkills(required_skills)), description ?? null, status,
-    JSON.stringify(validateRounds(rounds)), at);
+    JSON.stringify(validateRounds(rounds)), newApplyToken(), at);
   return getJob(Number(lastInsertRowid));
 }
 

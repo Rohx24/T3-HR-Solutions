@@ -197,7 +197,7 @@ export function applyInsights(candidateId, ins, at = now()) {
 
 // ---------- calls ----------
 
-const CALL_COLUMNS = `id, candidate_id, application_id, method, audio_name, duration_seconds, notes, transcript, summary,
+const CALL_COLUMNS = `id, candidate_id, application_id, method, channel, audio_name, duration_seconds, notes, transcript, summary,
   insights, status, error, recorded_by, created_at, (audio_file IS NOT NULL) AS has_audio`;
 
 export const toCall = (r) => r && ({ ...r, has_audio: Boolean(r.has_audio), insights: r.insights ? JSON.parse(r.insights) : null });
@@ -214,7 +214,7 @@ export function getCallScoped(id) {
   return row ?? null;
 }
 
-export function createCall({ candidateId, applicationId, method, audioFile, audioName, notes, recordedBy }, at = now()) {
+export function createCall({ candidateId, applicationId, method, channel, audioFile, audioName, notes, recordedBy }, at = now()) {
   const cand = db.prepare('SELECT id FROM candidates WHERE id = ? AND workspace_id = ?').get(candidateId, workspaceId());
   if (!cand) throw new HttpError(404, 'Candidate not found');
   if (applicationId) {
@@ -226,9 +226,9 @@ export function createCall({ candidateId, applicationId, method, audioFile, audi
   // Nothing to wait for when there is no audio and no AI: save the notes straight away.
   const status = audioFile || aiEnabled() ? 'processing' : 'done';
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO calls (candidate_id, application_id, method, audio_file, audio_name, notes, status, recorded_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(candidateId, applicationId || null, method, audioFile ?? null, audioName ?? null, text, status, recordedBy ?? null, at, at);
+    INSERT INTO calls (candidate_id, application_id, method, channel, audio_file, audio_name, notes, status, recorded_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(candidateId, applicationId || null, method, channel === 'whatsapp' ? 'whatsapp' : 'phone', audioFile ?? null, audioName ?? null, text, status, recordedBy ?? null, at, at);
   const id = Number(lastInsertRowid);
   if (status === 'done') addEvent(candidateId, 'call', 'Call notes added', at);
   return id;

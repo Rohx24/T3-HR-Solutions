@@ -6,6 +6,7 @@ import { formatDate, formatYears, initials, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
 import CallDialog from '../components/CallDialog.jsx'
 import CallsList from '../components/CallsList.jsx'
+import ContactBar from '../components/ContactBar.jsx'
 import { SOURCES } from '../sources.js'
 import ProfileDetails from '../components/ProfileDetails.jsx'
 import HelpBox from '../components/HelpBox.jsx'
@@ -255,6 +256,7 @@ export default function CandidateDetail() {
                 + Add call details
               </button>
             </div>
+            <ContactBar candidate={c} />
             <CallsList calls={c.calls} onChanged={() => candidate.reload()} />
           </section>
 

@@ -52,7 +52,8 @@ function CallItem({ call, onChanged }) {
     <li className={`call-item call-${call.status}`}>
       <div className="call-head">
         <div>
-          <strong>{METHOD[call.method]}</strong>
+          <strong>{call.channel === 'whatsapp' ? 'WhatsApp call' : 'Phone call'}</strong>
+          <span className="muted small"> · {METHOD[call.method]}</span>
           <span className="muted small">
             {' '}
             · {formatDate(call.created_at)} ({timeAgo(call.created_at)})

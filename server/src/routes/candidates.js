@@ -146,13 +146,14 @@ const audioUpload = multer({
 });
 const callLimit = rateLimit({ name: 'call', max: 20, windowSec: 60, key: (req) => req.user?.id ?? req.ip });
 
-// POST /api/candidates/:id/calls  multipart: audio? (file), method (recorded|uploaded|typed), notes?, application_id?
+// POST /api/candidates/:id/calls  multipart: audio? (file), method (recorded|uploaded|typed), channel (phone|whatsapp), notes?, application_id?
 router.post('/:id/calls', callLimit, audioUpload.single('audio'), bindContext, (req, res) => {
   const method = req.file ? (req.body?.method === 'recorded' ? 'recorded' : 'uploaded') : 'typed';
   const id = createCall({
     candidateId: idParam(req),
     applicationId: req.body?.application_id ? Number(req.body.application_id) : null,
     method,
+    channel: req.body?.channel,
     audioFile: req.file?.filename,
     audioName: req.file ? (method === 'recorded' ? 'Live recording' : req.file.originalname) : null,
     notes: req.body?.notes,

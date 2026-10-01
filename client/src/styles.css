@@ -445,7 +445,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .sidebar { width: 100%; height: auto; position: sticky; top: 0; z-index: 35; flex-direction: row; align-items: center; flex-wrap: wrap; }
   .sidebar::before { width: 100%; }
   .side-logo { border: 0; padding: 10px 16px; }
-  .ws-chip, .side-foot, .logo-word { display: none; }
+  .ws-chip, .side-foot, .sidebar .logo-word { display: none; }
   .nav { flex-direction: row; flex: 1; justify-content: flex-end; padding: 0 8px; }
   .nav-link { padding: 14px 12px; }
   .nav-link.active::before { left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 3px; }

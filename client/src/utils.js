@@ -54,3 +54,11 @@ export function formatBytes(n = 0) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
+
+// Indian numbers default to +91. Digits only (wa.me / tel format), or null if it doesn't look like a mobile number.
+export function intlNumber(phone) {
+  let d = String(phone ?? '').replace(/\D/g, '')
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1)
+  if (d.length === 10) d = `91${d}`
+  return d.length >= 11 && d.length <= 15 ? d : null
+}
