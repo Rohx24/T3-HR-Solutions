@@ -90,7 +90,11 @@ export function ReturningBadge({ times }) {
 
 export function MatchScore({ score }) {
   const tone = score >= 75 ? 'high' : score >= 50 ? 'mid' : 'low'
-  return <span className={`match match-${tone}`}>{score ?? 0}%</span>
+  return (
+    <span className={`match match-${tone}`} title={`Has ${score ?? 0}% of the skills this job needs`}>
+      {score ?? 0}% match
+    </span>
+  )
 }
 
 export function Stars({ value = 0 }) {

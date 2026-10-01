@@ -5,6 +5,7 @@ import { useApi, useDebounced } from '../hooks.js'
 import { formatYears, initials, timeAgo } from '../utils.js'
 import UploadResume from '../components/UploadResume.jsx'
 import { PageHeader, PageState, ReturningBadge, SkillChips, Spinner } from '../components/ui.jsx'
+import HelpBox from '../components/HelpBox.jsx'
 
 export default function Candidates() {
   const navigate = useNavigate()
@@ -12,7 +13,8 @@ export default function Candidates() {
   const [q, setQ] = useState(params.get('q') || '')
   const role = params.get('role') || ''
   const skill = params.get('skill') || ''
-  const [uploadOpen, setUploadOpen] = useState(false)
+  // /candidates?upload=1 (from the dashboard's welcome panel) opens the upload dialog straight away.
+  const [uploadOpen, setUploadOpen] = useState(params.get('upload') === '1')
   const dq = useDebounced(q)
 
   const meta = useApi(() => api.meta(), [])
@@ -32,24 +34,34 @@ export default function Candidates() {
     <>
       <PageHeader
         title="Candidates"
-        subtitle="Every resume you upload lives in one searchable talent pool"
+        subtitle="Everyone you have added. Upload a resume to add a new person."
         actions={
           <>
             <a className="btn" href={api.exportUrl({ q: dq, role, skill })} download>
               Export CSV
             </a>
-            <button className="btn btn-primary" onClick={() => setUploadOpen(true)} data-tour="upload">
-              + Upload resume
+            <button className="btn btn-primary btn-lg" onClick={() => setUploadOpen(true)} data-tour="upload">
+              + Upload a resume
             </button>
           </>
         }
+      />
+
+      <HelpBox
+        id="candidates"
+        title="What can I do here?"
+        steps={[
+          'Press "Upload a resume" and choose the file. The app reads the resume and fills in the details for you.',
+          'Type in the search box to find someone by name, skill or anything written in their resume.',
+          'Click a person to see everything about them and to record interview feedback.',
+        ]}
       />
 
       <div className="card toolbar" data-tour="filters">
         <input
           className="search"
           type="search"
-          placeholder="Search name, email, skills, resume text…"
+          placeholder="Search by name, skill or anything in the resume"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           aria-label="Search candidates"

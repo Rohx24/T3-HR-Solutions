@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
+import { useApi } from '../hooks.js'
 import { initials } from '../utils.js'
+import { useToast } from './Toast.jsx'
 import { useTour } from './Tour.jsx'
+import { Modal } from './ui.jsx'
 
 const ROLE_LABEL = { admin: 'Admin', recruiter: 'Recruiter', interviewer: 'Interviewer' }
 
@@ -9,7 +13,10 @@ export default function Topbar() {
   const { user, logout } = useAuth()
   const tour = useTour()
   const [open, setOpen] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
   const menuRef = useRef(null)
+  const config = useApi(() => api.authConfig(), [])
+  const isDemo = config.data?.demo?.email?.toLowerCase() === user?.email?.toLowerCase()
   const toured = hasToured(user)
 
   useEffect(() => {
@@ -68,6 +75,11 @@ export default function Topbar() {
               <button className="menu-item" role="menuitem" onClick={() => (setOpen(false), startTour())}>
                 Replay the guide
               </button>
+              {!isDemo && user?.role === 'admin' && (
+                <button className="menu-item" role="menuitem" onClick={() => (setOpen(false), setConfirmClear(true))}>
+                  Clear all workspace data
+                </button>
+              )}
               <button className="menu-item danger" role="menuitem" onClick={logout}>
                 Sign out
               </button>
@@ -75,7 +87,54 @@ export default function Topbar() {
           )}
         </div>
       </div>
+      <ClearWorkspaceDialog open={confirmClear} onClose={() => setConfirmClear(false)} workspace={user?.workspace?.name} />
     </header>
+  )
+}
+
+function ClearWorkspaceDialog({ open, onClose, workspace }) {
+  const toast = useToast()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function clear(e) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const { deleted } = await api.clearWorkspace()
+      toast.success('Workspace cleared', { message: `${deleted.candidates} candidates, ${deleted.jobs} jobs and ${deleted.companies} companies removed.` })
+      // Reload so every page starts from the empty workspace.
+      setTimeout(() => window.location.assign('/'), 700)
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} title="Clear all workspace data" onClose={() => !busy && (setText(''), onClose())}>
+      <form className="form" onSubmit={clear}>
+        <p>
+          This permanently deletes every candidate, resume, job, company and interview comment in <strong>{workspace}</strong>. Your
+          account stays, and the dashboard goes back to zero. This cannot be undone.
+        </p>
+        <label className="field">
+          <span>Type DELETE to confirm</span>
+          <input value={text} onChange={(e) => setText(e.target.value)} autoFocus placeholder="DELETE" />
+        </label>
+        {error && <p className="form-error">{error}</p>}
+        <div className="form-actions">
+          <button type="button" className="btn" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button className="btn btn-danger" disabled={text !== 'DELETE' || busy}>
+            {busy ? 'Clearing…' : 'Delete everything'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

@@ -21,7 +21,7 @@ export const TOUR_STEPS = [
     route: '/',
     target: 'nav',
     title: 'Your workspace',
-    body: 'Everything here belongs to your account only. Use these three sections: Dashboard for the overview, Candidates for your talent pool, Jobs for hiring pipelines.',
+    body: 'Everything here belongs to your account only. Use these three sections: Home for a summary, Candidates for the people you add, and Jobs for your openings.',
   },
   {
     route: '/',
@@ -39,7 +39,7 @@ export const TOUR_STEPS = [
     route: '/candidates',
     target: 'upload',
     title: 'Step 1: add a resume',
-    body: 'Click Upload resume and drop a PDF, Word or text file. Name, contact details, skills, experience and role are filled in for you. If the same email applies again, the existing profile is updated instead of duplicated.',
+    body: 'Click "Upload a resume" and choose a PDF, Word or text file. The details are read from the resume and filled in for you. If the same email applies again, the existing profile is updated instead of duplicated.',
   },
   {
     route: '/candidates',
@@ -62,7 +62,7 @@ export const TOUR_STEPS = [
   {
     route: firstCandidateRoute,
     target: 'note-form',
-    title: 'Step 2: comment after every round',
+    title: 'Step 2: write feedback after every interview',
     body: 'After each interview, pick the round, give a 1 to 5 rating and write what you saw. Your name is added automatically and it all appears in the history on the right.',
   },
   {
@@ -80,7 +80,7 @@ export const TOUR_STEPS = [
   {
     route: firstJobRoute,
     target: 'suggestions',
-    title: 'Step 4: reuse your talent pool',
+    title: 'Step 4: reuse people you already have',
     body: 'People you already have are ranked by how well their skills match this job, with matched and missing skills shown. Add the best fits with one click instead of sourcing from scratch.',
   },
   {

@@ -72,7 +72,7 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
   const openJobs = (jobs.data || []).filter((j) => j.status !== 'closed')
 
   return (
-    <Modal open={open} title={result ? 'Resume parsed' : 'Upload resume'} onClose={close}>
+    <Modal open={open} title={result ? 'Candidate added' : 'Add a candidate'} onClose={close}>
       {result ? (
         <ParsedResult result={result} onAnother={reset} onClose={close} />
       ) : (
@@ -111,16 +111,16 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
               </>
             ) : (
               <>
-                <strong>Drop a resume here or click to browse</strong>
-                <span className="muted small">PDF, DOCX or TXT, up to 5 MB</span>
+                <strong>Step 1: Click here to choose the resume file</strong>
+                <span className="muted small">Or drag the file onto this box. PDF, Word or text, up to 5 MB.</span>
               </>
             )}
           </div>
 
           <label className="field">
-            <span>Apply to job (optional)</span>
+            <span>Step 2 (optional): Add them to a job</span>
             <select value={jobId} onChange={(e) => setJobId(e.target.value)}>
-              <option value="">Just add to talent pool</option>
+              <option value="">No, just save the candidate</option>
               {openJobs.map((j) => (
                 <option key={j.id} value={j.id}>
                   {j.title} · {j.company_name}
@@ -129,6 +129,7 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
             </select>
           </label>
 
+          {busy && <p className="muted small">Reading the resume. This can take up to 20 seconds, please wait.</p>}
           {error && <p className="form-error">{error}</p>}
 
           <div className="form-actions">
@@ -136,7 +137,7 @@ export default function UploadResume({ open, onClose, onUploaded, defaultJobId =
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={busy || !file}>
-              {busy ? 'Parsing…' : 'Upload & parse'}
+              {busy ? 'Reading the resume…' : 'Step 3: Upload'}
             </button>
           </div>
         </form>
@@ -164,6 +165,8 @@ function ParsedResult({ result, onAnother, onClose }) {
           </p>
         </div>
       </div>
+      {result.parse_warning && <p className="form-error">{result.parse_warning}</p>}
+      {c.profile?.summary && <p>{c.profile.summary}</p>}
       <dl className="kv">
         <dt>Email</dt>
         <dd>{c.email || '-'}</dd>

@@ -5,6 +5,7 @@ import { useApi } from '../hooks.js'
 import { STAGES, parseSkills, stageSlug, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
 import { Modal, PageHeader, PageState, SkillChips } from '../components/ui.jsx'
+import HelpBox from '../components/HelpBox.jsx'
 
 const NEW_COMPANY = '__new'
 
@@ -16,12 +17,21 @@ export default function Jobs() {
     <>
       <PageHeader
         title="Jobs"
-        subtitle="Open roles across client companies"
+        subtitle="Every job opening you are hiring for. Click a job to see its candidates."
         actions={
-          <button className="btn btn-primary" onClick={() => setFormOpen(true)} data-tour="new-job">
-            + New job
+          <button className="btn btn-primary btn-lg" onClick={() => setFormOpen(true)} data-tour="new-job">
+            + Create a job
           </button>
         }
+      />
+
+      <HelpBox
+        id="jobs"
+        title="What can I do here?"
+        steps={[
+          'Press "Create a job" to add a new opening for a client company, with the skills it needs.',
+          'Click any job card to open its hiring board and move people from step to step.',
+        ]}
       />
 
       {!jobs.data ? (
@@ -42,7 +52,7 @@ export default function Jobs() {
         </div>
       )}
 
-      <Modal open={formOpen} title="New job" onClose={() => setFormOpen(false)}>
+      <Modal open={formOpen} title="Create a job" onClose={() => setFormOpen(false)}>
         <NewJobForm
           onCancel={() => setFormOpen(false)}
           onCreated={() => {
@@ -143,7 +153,7 @@ function NewJobForm({ onCancel, onCreated }) {
       })
       toast.success('Job created', {
         message: `${job.title} is open. Check the suggested candidates.`,
-        link: { to: `/jobs/${job.id}`, label: 'Open pipeline' },
+        link: { to: `/jobs/${job.id}`, label: 'Open the hiring board' },
       })
       onCreated(job)
     } catch (err) {

@@ -11,9 +11,9 @@ const icons = {
 }
 
 const links = [
-  { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
-  { to: '/candidates', label: 'Candidates', icon: 'candidates' },
-  { to: '/jobs', label: 'Jobs', icon: 'jobs' },
+  { to: '/', label: 'Home', hint: 'Summary of your hiring', icon: 'dashboard', end: true },
+  { to: '/candidates', label: 'Candidates', hint: 'People and their resumes', icon: 'candidates' },
+  { to: '/jobs', label: 'Jobs', hint: 'Openings and interviews', icon: 'jobs' },
 ]
 
 export default function Sidebar() {
@@ -35,7 +35,10 @@ export default function Sidebar() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               {icons[l.icon]}
             </svg>
-            <span>{l.label}</span>
+            <span className="nav-label">
+              <span>{l.label}</span>
+              <small>{l.hint}</small>
+            </span>
           </NavLink>
         ))}
       </nav>

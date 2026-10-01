@@ -5,6 +5,7 @@ import { useApi } from '../hooks.js'
 import { STAGES, formatYears, stageSlug, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
 import { MatchScore, PageHeader, PageState, ReturningBadge, SkillChips, StageSelect } from '../components/ui.jsx'
+import HelpBox, { STAGE_HELP } from '../components/HelpBox.jsx'
 
 export default function JobDetail() {
   const { id } = useParams()
@@ -64,12 +65,22 @@ export default function JobDetail() {
           </Link>
         }
         title={j.title}
-        subtitle={`${j.company_name} · ${j.total ?? applications.length} in pipeline · posted ${timeAgo(j.created_at)}`}
+        subtitle={`${j.company_name} · ${j.total ?? applications.length} people in this job · added ${timeAgo(j.created_at)}`}
+      />
+
+      <HelpBox
+        id="job-board"
+        title="This is the hiring board for this job"
+        steps={[
+          'Each column is a step in hiring, from left (new) to right (hired). The small text under each name says what the step means.',
+          'When someone passes a step, drag their card to the next column, or pick the step from the drop-down on their card.',
+          'On the right are people you already have who suit this job. Press "Add to this job" to include them.',
+        ]}
       />
 
       <section className="card job-summary">
         <div>
-          <p className="label">Required skills</p>
+          <p className="label">Skills this job needs</p>
           <SkillChips skills={j.required_skills} />
         </div>
         {j.description && <p className="muted">{j.description}</p>}
@@ -94,7 +105,10 @@ export default function JobDetail() {
               }}
             >
               <div className={`kanban-head stage-border-${stageSlug(stage)}`}>
-                <span>{stage}</span>
+                <span className="stage-name" title={STAGE_HELP[stage]}>
+                  {stage}
+                  <small>{STAGE_HELP[stage]}</small>
+                </span>
                 <span className="count">{byStage[stage].length}</span>
               </div>
               <div className="kanban-cards">
@@ -122,15 +136,15 @@ export default function JobDetail() {
                     <StageSelect value={a.stage} onChange={(s) => move(a, s)} />
                   </div>
                 ))}
-                {byStage[stage].length === 0 && <div className="kanban-empty">Drop here</div>}
+                {byStage[stage].length === 0 && <div className="kanban-empty">Drag a card here</div>}
               </div>
             </div>
           ))}
         </div>
 
         <aside className="card suggestions" data-tour="suggestions">
-          <h2 className="card-title">Suggested from talent pool</h2>
-          <p className="muted small">Ranked by overlap with this job's required skills.</p>
+          <h2 className="card-title">Good matches from your candidates</h2>
+          <p className="muted small">People you already have, best match first. The % shows how many of this job's skills they have.</p>
           {!matches.data ? (
             <PageState loading={matches.loading} error={matches.error} onRetry={matches.reload} />
           ) : matches.data.length === 0 ? (
@@ -155,7 +169,7 @@ export default function JobDetail() {
                   <SkillChips skills={m.matched_skills} variant="match" />
                   {m.missing_skills?.length > 0 && <SkillChips skills={m.missing_skills} variant="missing" />}
                   <button className="btn btn-small btn-primary" onClick={() => addToPipeline(m)} disabled={adding === m.candidate.id}>
-                    {adding === m.candidate.id ? 'Adding…' : 'Add to pipeline'}
+                    {adding === m.candidate.id ? 'Adding…' : 'Add to this job'}
                   </button>
                 </li>
               ))}

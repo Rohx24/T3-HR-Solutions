@@ -37,6 +37,7 @@ export const api = {
   signup: (data) => request('/auth/signup', json('POST', data)),
   google: (credential) => request('/auth/google', json('POST', { credential })),
   logout: () => request('/auth/logout', { method: 'POST' }),
+  clearWorkspace: () => request('/workspace/data', json('DELETE', { confirm: 'DELETE' })),
   meta: () => request('/meta'),
   stats: () => request('/stats'),
 

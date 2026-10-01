@@ -31,8 +31,8 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
 
   async function submit(e) {
     e.preventDefault()
-    if (!rating) return setError('Give a rating from 1 to 5.')
-    if (!body.trim()) return setError('Write a comment.')
+    if (!rating) return setError('Please click the stars to give a rating from 1 to 5.')
+    if (!body.trim()) return setError('Please write a few words about the interview.')
     setBusy(true)
     setError('')
     try {
@@ -58,9 +58,9 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
     <form className="form" onSubmit={submit}>
       <div className="form-row">
         <label className="field">
-          <span>Application</span>
+          <span>Which job is this for?</span>
           <select value={appId} onChange={(e) => chooseApp(e.target.value)}>
-            <option value="">General (no job)</option>
+            <option value="">Not for a specific job</option>
             {applications.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.job_title} · {a.company_name}
@@ -69,7 +69,7 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
           </select>
         </label>
         <label className="field">
-          <span>Round</span>
+          <span>Which interview step?</span>
           <select value={round} onChange={(e) => setRound(e.target.value)}>
             {STAGES.filter((s) => s !== 'Applied').map((s) => (
               <option key={s}>{s}</option>
@@ -79,16 +79,16 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
       </div>
       <div className="form-row">
         <div className="field">
-          <span>Rating</span>
+          <span>Rating (1 = poor, 5 = excellent)</span>
           <StarInput value={rating} onChange={setRating} />
         </div>
         <label className="field">
-          <span>Interviewer</span>
+          <span>Your name</span>
           <input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Your name" />
         </label>
       </div>
       <label className="field">
-        <span>Comment</span>
+        <span>What did you think?</span>
         <textarea
           rows={3}
           value={body}
@@ -99,7 +99,7 @@ export default function NoteForm({ candidateId, applications, onSaved }) {
       {error && <p className="form-error">{error}</p>}
       <div className="form-actions">
         <button className="btn btn-primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save comment'}
+          {busy ? 'Saving…' : 'Save feedback'}
         </button>
       </div>
     </form>

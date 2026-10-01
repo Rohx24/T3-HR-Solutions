@@ -201,7 +201,7 @@ export function Login() {
 export function Signup() {
   const { signup } = useAuth()
   const config = useAuthConfig()
-  const [form, setForm] = useState({ name: '', email: '', password: '', workspace_name: '', sample_data: true })
+  const [form, setForm] = useState({ name: '', email: '', password: '', workspace_name: '', sample_data: false })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
@@ -260,8 +260,8 @@ export function Signup() {
         <label className="check">
           <input type="checkbox" checked={form.sample_data} onChange={set('sample_data')} />
           <span>
-            <strong>Start with sample data</strong>
-            <span className="muted small">Example candidates, jobs and interview notes so you can try everything. Recommended.</span>
+            <strong>Add example data (optional)</strong>
+            <span className="muted small">Leave unticked to start with an empty workspace. Tick it to explore with sample candidates and jobs, which you can clear later.</span>
           </span>
         </label>
         {error && <p className="form-error">{error}</p>}

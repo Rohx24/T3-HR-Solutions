@@ -5,6 +5,8 @@ import { useApi } from '../hooks.js'
 import { formatDate, formatYears, initials, timeAgo } from '../utils.js'
 import { useToast } from '../components/Toast.jsx'
 import NoteForm from '../components/NoteForm.jsx'
+import ProfileDetails from '../components/ProfileDetails.jsx'
+import HelpBox from '../components/HelpBox.jsx'
 import { useAuth } from '../auth.jsx'
 import {
   MatchScore,
@@ -78,7 +80,26 @@ export default function CandidateDetail() {
             {c.name} <ReturningBadge times={c.times_applied} />
           </span>
         }
-        subtitle={c.primary_role || 'Role not detected'}
+        subtitle={
+          <span className="title-with-badge">
+            {c.primary_role || 'Role not detected'}
+            {c.parsed_by && c.parsed_by !== 'rules' && (
+              <span className="ai-badge" title={`Resume details were read by ${c.parsed_by}`}>
+                Details read by AI
+              </span>
+            )}
+          </span>
+        }
+      />
+
+      <HelpBox
+        id="candidate"
+        title="Everything about this person"
+        steps={[
+          'Left side: their details, read from the resume.',
+          'Right side, "Jobs this person is in": change the step to show how far they have reached.',
+          'After an interview, fill in "Write interview feedback" and press Save feedback.',
+        ]}
       />
 
       <div className="detail-grid">
@@ -107,8 +128,12 @@ export default function CandidateDetail() {
             </div>
           </section>
 
+          <ProfileDetails profile={c.profile} />
+        </div>
+
+        <div className="stack">
           <section className="card" data-tour="applications">
-            <h2 className="card-title">Applications</h2>
+            <h2 className="card-title">Jobs this person is in</h2>
             {applications.length ? (
               <ul className="app-list">
                 {applications.map((a) => (
@@ -127,11 +152,11 @@ export default function CandidateDetail() {
                 ))}
               </ul>
             ) : (
-              <p className="muted">Not in any job pipeline yet.</p>
+              <p className="muted">Not added to any job yet. Choose a job below to add them.</p>
             )}
             <div className="inline-form">
               <select value={addJobId} onChange={(e) => setAddJobId(e.target.value)} aria-label="Add to job">
-                <option value="">{availableJobs.length ? 'Add to job…' : 'No other open jobs'}</option>
+                <option value="">{availableJobs.length ? 'Choose a job to add them to…' : 'No other open jobs'}</option>
                 {availableJobs.map((j) => (
                   <option key={j.id} value={j.id}>
                     {j.title} · {j.company_name}
@@ -139,7 +164,7 @@ export default function CandidateDetail() {
                 ))}
               </select>
               <button className="btn btn-primary" onClick={addToJob} disabled={!addJobId || busy}>
-                Add
+                Add to job
               </button>
             </div>
           </section>
@@ -147,7 +172,7 @@ export default function CandidateDetail() {
           <section className="card">
             <details className="resume">
               <summary>
-                <span className="card-title">Resume text</span>
+                <span className="card-title">Original resume</span>
                 {c.has_resume_file && (
                   <a className="btn btn-small" href={api.resumeUrl(c.id)} onClick={(e) => e.stopPropagation()} download>
                     Download original
@@ -157,16 +182,13 @@ export default function CandidateDetail() {
               <pre>{c.resume_text || 'No resume text stored.'}</pre>
             </details>
           </section>
-        </div>
-
-        <div className="stack">
           <section className="card" data-tour="note-form">
-            <h2 className="card-title">Add round comment</h2>
+            <h2 className="card-title">Write interview feedback</h2>
             <NoteForm candidateId={c.id} applications={applications} onSaved={() => candidate.reload()} />
           </section>
 
           <section className="card">
-            <h2 className="card-title">Round comments and history</h2>
+            <h2 className="card-title">Feedback and history</h2>
             {timeline.length ? (
               <ol className="timeline">
                 {timeline.map((item) =>
@@ -195,7 +217,7 @@ export default function CandidateDetail() {
                 )}
               </ol>
             ) : (
-              <p className="muted">No comments or history yet.</p>
+              <p className="muted">Nothing yet. Feedback you save will appear here.</p>
             )}
           </section>
         </div>
